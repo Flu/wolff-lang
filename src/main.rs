@@ -5,6 +5,7 @@ use input_stream::InputStream;
 use lexer::TokenStream;
 use std::env;
 use std::fs;
+use chrono::prelude::*;
 use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
 
@@ -19,7 +20,8 @@ fn main() {
 }
 
 fn print_splash_screen() {
-    println!("Wolff interpreter")
+    println!("Wolff interpreter v0.1.0");
+    println!("{}", Local::now());
 }
 
 fn start_prompt() -> Result<()> {
