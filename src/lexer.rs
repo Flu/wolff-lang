@@ -199,6 +199,6 @@ fn is_whitespace(ch: char) -> bool {
 }
 
 fn is_id(ch: char) -> bool {
-    is_id_start(ch) || "?!-<>=0123456789".contains(ch)
+    is_id_start(ch) || "-!?*0123456789".contains(ch)
 }
 
