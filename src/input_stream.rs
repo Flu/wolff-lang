@@ -34,7 +34,7 @@ impl InputStream {
     }
 
     pub fn eof(&self) -> bool {
-        self.get_char_at() == None
+        self.get_char_at().is_none()
     }
 
     fn get_char_at(&self) -> Option<char> {

@@ -1,4 +1,5 @@
 use crate::input_stream::InputStream;
+use std::fmt;
 use regex::Regex;
 
 const KEYWORDS: &'static [&'static str] = &["if", "then", "else", "lambda", "λ", "true", "false"];
@@ -12,8 +13,8 @@ pub struct TokenStream {
 
 #[derive(Clone)]
 pub struct Token {
-    token_type: TokenType,
-    value: String
+    pub token_type: TokenType,
+    pub value: String
 }
 
 #[derive(Clone)]
@@ -24,6 +25,20 @@ pub enum TokenType {
     Keyword,
     Variable,
     Operation
+}
+
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let string_token = match self {
+            TokenType::Keyword => "Keyword",
+            TokenType::Punctuation => "Punctuation",
+            TokenType::Numeral => "Numeral",
+            TokenType::String => "String",
+            TokenType::Variable => "Variable",
+            TokenType::Operation => "Operation",
+        };
+        write!(f, "{}", string_token)
+    }
 }
 
 impl Token {
@@ -82,7 +97,7 @@ impl TokenStream {
 
     fn read_while(&mut self, predicate: &mut dyn FnMut(char) -> bool) -> String {
         let mut return_string = String::new();
-        while self.input.eof() && predicate(self.input.peek()) {
+        while !self.input.eof() && predicate(self.input.peek()) {
             return_string.push(self.input.next());
         }
         return_string
@@ -150,11 +165,16 @@ impl TokenStream {
     pub fn next(&mut self) -> Option<Token> {
         let tok = self.current.clone();
         self.current = None;
-        if tok.is_some() {
-            self.read_next()
+        if tok.is_none() {
+            self.current = self.read_next();
+            self.current.clone()
         } else {
             tok
         }
+    }
+
+    pub fn eof(&mut self) -> bool {
+        self.peek().is_none()
     }
 }
 
