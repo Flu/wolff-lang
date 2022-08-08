@@ -114,12 +114,19 @@ impl TokenStream {
             ));
         }
 
-        Err(InvalidTokenError {
+        //Illegal character detected here, skip this one and return an error
+        
+        let error = Err(InvalidTokenError {
             message: format!(
                 "Invalid character at {}:{}",
                 self.input.line, self.input.col
             ),
-        })
+            line_as_string: self.input.get_current_line().to_string(),
+            line: self.input.line,
+            col: self.input.col
+        });
+        self.input.next();
+        error
     }
 
     fn read_while(&mut self, predicate: &mut dyn FnMut(char) -> bool) -> String {

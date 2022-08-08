@@ -37,6 +37,10 @@ impl InputStream {
         self.get_char_at().is_none()
     }
 
+    pub fn get_current_line(&self) -> &str {
+        self.input.lines().nth(self.line as usize).unwrap()
+    }
+
     fn get_char_at(&self) -> Option<char> {
         self.input.chars().nth(self.pos as usize)
     }

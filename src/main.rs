@@ -60,8 +60,10 @@ fn start_lexer_from_file(filename: &String) -> Result<()> {
     return Result::Ok(())
 }
 
-fn print_error_message(message: &String) {
-    println!("[\x1b[91mERR\x1b[0m] {}", message);
+fn print_error_message(error: &errors::InvalidTokenError) {
+    println!("[\x1b[91mERR\x1b[0m] {}", error.message);
+    println!("|\t{}", error.line_as_string);
+    println!("|\t{:>width$}", "^", width = (error.col+1) as usize);
 }
 
 fn start_lexer(contents: &String) {
@@ -71,9 +73,8 @@ fn start_lexer(contents: &String) {
     while !lexer.eof() {
         match lexer.next() {
             Ok(new_token) => println!("{}: {}", new_token.token_type, new_token.value),
-            Err(e) => { 
-                print_error_message(&e.message);
-                break;
+            Err(e) => {
+                print_error_message(&e);
             }
         };
     }
