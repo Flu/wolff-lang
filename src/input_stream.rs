@@ -1,8 +1,8 @@
 #[derive(Clone)]
 pub struct InputStream {
     pos: u32,
-    line: u32,
-    col: u32,
+    pub line: u32,
+    pub col: u32,
     input: String
 }
 

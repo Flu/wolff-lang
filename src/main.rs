@@ -1,5 +1,6 @@
 pub mod input_stream;
 pub mod lexer;
+pub mod errors;
 
 use input_stream::InputStream;
 use lexer::TokenStream;
@@ -19,7 +20,7 @@ fn main() {
 }
 
 fn print_splash_screen() {
-    println!("Wolff interpreter v0.1.0");
+    println!("\x1b[1mWolff interpreter v0.1.0\x1b[0m");
 }
 
 fn start_prompt() -> Result<()> {
@@ -29,7 +30,7 @@ fn start_prompt() -> Result<()> {
         println!("No previous history.");
     }
     loop {
-        let readline = rl.readline("λ ");
+        let readline = rl.readline("\x1b[1mλ \x1b[0m");
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str());
@@ -59,12 +60,21 @@ fn start_lexer_from_file(filename: &String) -> Result<()> {
     return Result::Ok(())
 }
 
+fn print_error_message(message: &String) {
+    println!("[\x1b[91mERR\x1b[0m] {}", message);
+}
+
 fn start_lexer(contents: &String) {
     let mut input_stream = InputStream::new(&contents);
     let mut lexer = TokenStream::new(&mut input_stream);
 
     while !lexer.eof() {
-        let new_token = lexer.next().unwrap();
-        println!("{}: {}", new_token.token_type, new_token.value);
+        match lexer.next() {
+            Ok(new_token) => println!("{}: {}", new_token.token_type, new_token.value),
+            Err(e) => { 
+                print_error_message(&e.message);
+                break;
+            }
+        };
     }
 }
