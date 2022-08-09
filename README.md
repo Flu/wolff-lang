@@ -1,6 +1,7 @@
 # Wolff
 ---------
-![example workflow](https://github.com/Flu/wolff-lang/actions/workflows/rust.yml/badge.svg)
+![example workflow](https://github.com/Flu/wolff-lang/actions/workflows/build.yml/badge.svg)
+![example workflow](https://github.com/Flu/wolff-lang/actions/workflows/tests.yml/badge.svg)
 ## Description
 This is the main source repository for the Wolff compiler.
 
