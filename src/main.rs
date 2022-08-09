@@ -62,8 +62,8 @@ fn start_lexer_from_file(filename: &String) -> Result<()> {
 
 fn print_error_message(error: &errors::InvalidTokenError) {
     println!("[\x1b[91mERR\x1b[0m] {}", error.message);
-    println!("|\t{}", error.line_as_string);
-    println!("|\t{:>width$}", "^", width = (error.col+1) as usize);
+    println!("  \x1b[96m|\x1b[0m {}", error.line_as_string);
+    println!("  \x1b[96m|\x1b[0m \x1b[93m{:>width$}\x1b[0m", "^", width = (error.col+1) as usize);
 }
 
 fn start_lexer(contents: &String) {

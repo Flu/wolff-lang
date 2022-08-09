@@ -114,7 +114,7 @@ impl TokenStream {
             ));
         }
 
-        //Illegal character detected here, skip this one and return an error
+        // Illegal character detected here, skip this one and return an error
         
         let error = Err(InvalidTokenError {
             message: format!(
