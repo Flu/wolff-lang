@@ -5,7 +5,7 @@ use regex::Regex;
 use std::fmt;
 
 const KEYWORDS: &'static [&'static str] = &[
-    "if", "else", "lambda", "λ", "true", "false", "while", "loop", "for",
+    "if", "else", "lambda", "λ", "true", "false", "while", "loop", "for", "defun", "return", "let",
 ];
 const PUNCTS: &'static [char] = &['(', ')', '{', '}', ',', '.', '-', '+', ';', '+', '-', '*', '/', '%', '=', '&', '|', '^', '<', '>', '!'];
 
@@ -339,5 +339,5 @@ fn is_whitespace(ch: char) -> bool {
 }
 
 fn is_id(ch: char) -> bool {
-    is_id_start(ch) || "-!?*0123456789".contains(ch)
+    is_id_start(ch) || "-!?0123456789".contains(ch)
 }
