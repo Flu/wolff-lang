@@ -1,6 +1,6 @@
 pub struct InvalidTokenError {
     pub message: String,
     pub line_as_string: String,
-    pub line: u32,
-    pub col: u32
+    pub line: usize,
+    pub col: usize
 }

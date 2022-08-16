@@ -4,42 +4,90 @@ use crate::input_stream::InputStream;
 use regex::Regex;
 use std::fmt;
 
-const KEYWORDS: &'static [&'static str] = &["if", "then", "else", "lambda", "λ", "true", "false"];
-const OP_CHARS: &'static [char] = &['+', '-', '*', '/', '%', '=', '&', '|', '^', '<', '>', '!'];
-const PUNCTS: &'static [char] = &[',', '.', ';', '(', ')', '{', '}', '[', ']'];
+const KEYWORDS: &'static [&'static str] = &[
+    "if", "else", "lambda", "λ", "true", "false", "while", "loop", "for",
+];
+const PUNCTS: &'static [char] = &['(', ')', '{', '}', ',', '.', '-', '+', ';', '+', '-', '*', '/', '%', '=', '&', '|', '^', '<', '>', '!'];
 
 pub struct TokenStream {
     input: InputStream,
     current: Token,
     has_started: bool,
+    has_error: bool,
 }
 
 #[derive(Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub value: String,
+    pub line: usize,
+    pub col: usize,
 }
 
 #[derive(Clone, PartialEq)]
 pub enum TokenType {
-    Punctuation,
-    Numeral,
-    String,
-    Keyword,
+    // Single character tokens
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Dot,
+    Minus,
+    Plus,
+    Semicolon,
+    Slash,
+    Star,
+    // One or two character tokens
+    Bang,
+    BangEqual,
+    Equal,
+    EqualEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+    // Literals
     Identifier,
-    Operation,
+    String,
+    Numeral,
+    // Keywords
+    Keyword,
+    // EOF token
     Eof,
 }
 
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_token = match self {
-            TokenType::Keyword => "Keyword",
-            TokenType::Punctuation => "Punctuation",
+            // Single character tokens
+            TokenType::LeftParen
+            | TokenType::RightParen
+            | TokenType::LeftBrace
+            | TokenType::RightBrace
+            | TokenType::Comma
+            | TokenType::Dot
+            | TokenType::Minus
+            | TokenType::Plus
+            | TokenType::Semicolon
+            | TokenType::Slash
+            | TokenType::Star => "Single punctuation",
+            // One or two character tokens
+            TokenType::BangEqual
+            | TokenType::Bang
+            | TokenType::Equal
+            | TokenType::EqualEqual
+            | TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Less
+            | TokenType::LessEqual => "Punctuation",
+            // Literals
             TokenType::Numeral => "Numeral",
             TokenType::String => "String",
             TokenType::Identifier => "Identifier",
-            TokenType::Operation => "Operation",
+            // Keywords
+            TokenType::Keyword => "Keyword",
+            // EOF token
             TokenType::Eof => "EOF",
         };
         write!(f, "{}", string_token)
@@ -53,10 +101,12 @@ impl Default for TokenType {
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, value: &String) -> Self {
+    pub fn new(token_type: TokenType, value: &String, line: usize, col: usize) -> Self {
         Token {
-            token_type: token_type,
+            token_type,
             value: value.to_owned(),
+            line,
+            col
         }
     }
 }
@@ -65,8 +115,9 @@ impl TokenStream {
     pub fn new(input: &mut InputStream) -> Self {
         TokenStream {
             input: input.clone(),
-            current: Token::new(TokenType::default(), &String::default()),
+            current: Token::new(TokenType::default(), &String::default(), 0, 0),
             has_started: false,
+            has_error: false,
         }
     }
 
@@ -76,7 +127,7 @@ impl TokenStream {
 
         // If input is EOF, return EOF token
         if self.input.eof() {
-            return Ok(Token::new(TokenType::Eof, &String::default()));
+            return Ok(Token::new(TokenType::Eof, &String::default(), self.input.line, self.input.col));
         }
 
         // Peek at the next character in the input stream to figure out what we need to do
@@ -89,7 +140,15 @@ impl TokenStream {
         }
 
         if ch == '"' {
-            return Ok(self.read_string());
+            let string_token = self.read_string();
+            if string_token.is_none() {
+                return Err(InvalidTokenError {
+                    message: format!("Invalid string termination at {}:{}", self.input.line, self.input.col),
+                    line_as_string: self.input.get_current_line().to_string(),
+                    line: self.input.line,
+                    col: self.input.col,
+                });
+            } else { return Ok(string_token.unwrap()); }
         }
 
         if ch.is_digit(10) {
@@ -101,21 +160,19 @@ impl TokenStream {
         }
 
         if is_punctuation(ch) {
-            return Ok(Token::new(
-                TokenType::Punctuation,
-                &self.input.next().to_string(),
-            ));
-        }
-
-        if is_op_char(ch) {
-            return Ok(Token::new(
-                TokenType::Operation,
-                &self.read_while(&mut is_op_char),
-            ));
+            let punctuation_token = self.read_punctuation();
+            if punctuation_token.is_none() {
+                return Err(InvalidTokenError {
+                    message: format!("Invalid operator at {}:{}", self.input.line, self.input.col),
+                    line_as_string: self.input.get_current_line().to_string(),
+                    line: self.input.line,
+                    col: self.input.col,
+                });
+            } else {return Ok(punctuation_token.unwrap());}
         }
 
         // Illegal character detected here, skip this one and return an error
-        
+
         let error = Err(InvalidTokenError {
             message: format!(
                 "Invalid character at {}:{}",
@@ -123,9 +180,10 @@ impl TokenStream {
             ),
             line_as_string: self.input.get_current_line().to_string(),
             line: self.input.line,
-            col: self.input.col
+            col: self.input.col,
         });
         self.input.next();
+        self.has_error = true;
         error
     }
 
@@ -141,16 +199,23 @@ impl TokenStream {
         self.read_while(&mut |x| x != '\n');
     }
 
-    fn read_string(&mut self) -> Token {
-        Token::new(TokenType::String, &self.read_escaped('"'))
+    fn read_string(&mut self) -> Option<Token> {
+        let return_string = self.read_escaped('"');
+
+        // if the string is None return none otherwise return a token
+        if return_string.is_none() {
+            return None;
+        } else {
+            return Some(Token::new(TokenType::String, &return_string.unwrap(), self.input.line, self.input.col));
+        }
     }
 
-    fn read_escaped(&mut self, end: char) -> String {
+    fn read_escaped(&mut self, end: char) -> Option<String> {
         let mut escaped = false;
         let mut return_string = String::new();
 
         self.input.next();
-        while !self.input.eof() {
+        loop {
             let ch = self.input.next();
             if escaped {
                 return_string.push(ch);
@@ -159,11 +224,13 @@ impl TokenStream {
                 escaped = true;
             } else if ch == end {
                 break;
+            } else if self.input.eof() {
+                return None
             } else {
                 return_string.push(ch);
             }
         }
-        return_string
+        Some(return_string)
     }
 
     fn read_number(&mut self) -> Token {
@@ -179,7 +246,7 @@ impl TokenStream {
             return ch.is_digit(10);
         });
 
-        Token::new(TokenType::Numeral, &number)
+        Token::new(TokenType::Numeral, &number, self.input.line, self.input.col)
     }
 
     fn read_ident(&mut self) -> Token {
@@ -192,7 +259,40 @@ impl TokenStream {
                 TokenType::Identifier
             },
             &identifier,
+            self.input.line,
+            self.input.col
         )
+    }
+
+    fn read_punctuation(&mut self) -> Option<Token> {
+        let punctuation = self.read_while(&mut is_punctuation);
+        let token_type = match punctuation.as_str() {
+            "=" => TokenType::Equal,
+            "==" => TokenType::EqualEqual,
+            "!=" => TokenType::BangEqual,
+            ">" => TokenType::Greater,
+            ">=" => TokenType::GreaterEqual,
+            "<" => TokenType::Less,
+            "<=" => TokenType::LessEqual,
+            "!" => TokenType::Bang,
+            "-" => TokenType::Minus,
+            "+" => TokenType::Plus,
+            "/" => TokenType::Slash,
+            "*" => TokenType::Star,
+            "," => TokenType::Comma,
+            "." => TokenType::Dot,
+            ";" => TokenType::Semicolon,
+            "(" => TokenType::LeftParen,
+            ")" => TokenType::RightParen,
+            "{" => TokenType::LeftBrace,
+            "}" => TokenType::RightBrace,
+            _ => return None
+        };
+        Some(Token::new(
+            token_type,
+            &punctuation,
+            self.input.line,
+            self.input.col))
     }
 
     pub fn peek(&self) -> Option<Token> {
@@ -222,10 +322,6 @@ impl TokenStream {
 
 fn is_keyword(word: &String) -> bool {
     KEYWORDS.iter().any(|&i| i == word)
-}
-
-fn is_op_char(ch: char) -> bool {
-    OP_CHARS.iter().any(|&i| i == ch)
 }
 
 fn is_id_start(ch: char) -> bool {

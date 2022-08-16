@@ -1,8 +1,8 @@
 #[derive(Clone)]
 pub struct InputStream {
-    pos: u32,
-    pub line: u32,
-    pub col: u32,
+    pos: usize,
+    pub line: usize,
+    pub col: usize,
     input: String
 }
 
@@ -38,11 +38,11 @@ impl InputStream {
     }
 
     pub fn get_current_line(&self) -> &str {
-        self.input.lines().nth(self.line as usize).unwrap()
+        self.input.lines().nth(self.line).unwrap()
     }
 
     fn get_char_at(&self) -> Option<char> {
-        self.input.chars().nth(self.pos as usize)
+        self.input.chars().nth(self.pos)
     }
 
     pub fn _croak(_msg: &String) {
