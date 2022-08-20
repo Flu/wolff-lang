@@ -276,6 +276,7 @@ impl TokenStream {
             ')' => TokenType::RightParen,
             '{' => TokenType::LeftBrace,
             '}' => TokenType::RightBrace,
+            '.' => TokenType::Dot,
             _ => TokenType::Eof,
         };
 
