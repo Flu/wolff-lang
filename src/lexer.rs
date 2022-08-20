@@ -265,6 +265,24 @@ impl TokenStream {
     }
 
     fn read_punctuation(&mut self) -> Option<Token> {
+        // First start looking for single lexemes and get those out of the way
+        // so they don't get compounded with other lexemes
+        
+        let next_char = self.input.peek();
+        let single_token_type: TokenType = match next_char {
+            ';' => TokenType::Semicolon,
+            ',' => TokenType::Comma,
+            '(' => TokenType::LeftParen,
+            ')' => TokenType::RightParen,
+            '{' => TokenType::LeftBrace,
+            '}' => TokenType::RightBrace,
+            _ => TokenType::Eof,
+        };
+
+        if single_token_type != TokenType::Eof {
+            return Some(Token::new(single_token_type, &self.input.next().to_string(), self.input.line, self.input.col));
+        }
+
         let punctuation = self.read_while(&mut is_punctuation);
         let token_type = match punctuation.as_str() {
             "=" => TokenType::Equal,
@@ -279,13 +297,6 @@ impl TokenStream {
             "+" => TokenType::Plus,
             "/" => TokenType::Slash,
             "*" => TokenType::Star,
-            "," => TokenType::Comma,
-            "." => TokenType::Dot,
-            ";" => TokenType::Semicolon,
-            "(" => TokenType::LeftParen,
-            ")" => TokenType::RightParen,
-            "{" => TokenType::LeftBrace,
-            "}" => TokenType::RightBrace,
             _ => return None
         };
         Some(Token::new(
