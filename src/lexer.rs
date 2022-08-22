@@ -5,7 +5,7 @@ use regex::Regex;
 use std::fmt;
 
 const KEYWORDS: &'static [&'static str] = &[
-    "if", "else", "lambda", "λ", "true", "false", "while", "loop", "for", "defun", "return", "let",
+    "if", "else", "lambda", "λ", "true", "false", "while", "loop", "for", "return", "let", "nil", "and", "or", "struct", "this"
 ];
 const PUNCTS: &'static [char] = &['(', ')', '{', '}', ',', '.', '-', '+', ';', '+', '-', '*', '/', '%', '=', '&', '|', '^', '<', '>', '!'];
 
@@ -50,6 +50,7 @@ pub enum TokenType {
     // Literals
     Identifier,
     String,
+    Integer,
     Numeral,
     // Keywords
     Keyword,
@@ -82,6 +83,7 @@ impl fmt::Display for TokenType {
             | TokenType::Less
             | TokenType::LessEqual => "Punctuation",
             // Literals
+            TokenType::Integer => "Integer",
             TokenType::Numeral => "Numeral",
             TokenType::String => "String",
             TokenType::Identifier => "Identifier",
@@ -246,6 +248,12 @@ impl TokenStream {
             return ch.is_digit(10);
         });
 
+        // If it is an integer, return an integer token
+        if !has_dec_point {
+            return Token::new(TokenType::Integer, &number, self.input.line, self.input.col)
+        }
+
+        // Otherwise return a float token
         Token::new(TokenType::Numeral, &number, self.input.line, self.input.col)
     }
 

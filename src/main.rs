@@ -1,9 +1,15 @@
+#[macro_use]
+extern crate num_derive;
+extern crate num_traits as num_derived_traits;
+
 pub mod input_stream;
 pub mod lexer;
 pub mod errors;
+pub mod vm;
 
 use input_stream::InputStream;
 use lexer::TokenStream;
+use vm::{VM, OpCode, Constant};
 use std::env;
 use std::fs;
 use rustyline::error::ReadlineError;
@@ -12,6 +18,38 @@ use rustyline::{Editor, Result};
 fn main() {
     let args: Vec<String> = env::args().collect();
     print_splash_screen();
+
+    // Chunk testing area
+    let mut vm = VM::new();
+
+    let mut offset = vm.chunk.add_constant(Constant::Integer(45688874));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 0);
+    vm.chunk.write_chunk(offset, 0);
+
+    offset = vm.chunk.add_constant(Constant::Float(1.2356));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 1);
+    vm.chunk.write_chunk(offset, 1);
+    offset = vm.chunk.add_constant(Constant::Float(256.235444));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 2);
+    vm.chunk.write_chunk(offset, 2);
+    offset = vm.chunk.add_constant(Constant::Float(4589845542425.2));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
+    vm.chunk.write_chunk(offset, 3);
+    offset = vm.chunk.add_constant(Constant::Float(1.0));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
+    vm.chunk.write_chunk(offset, 3);
+    offset = vm.chunk.add_constant(Constant::Float(-5.0));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
+    vm.chunk.write_chunk(offset, 3);
+    
+    vm.chunk.write_chunk(OpCode::Return as u8, 4);
+    vm.chunk.write_chunk(OpCode::Unknown as u8, 4);
+    vm.chunk.write_chunk(OpCode::Unknown as u8, 4);
+    vm.chunk.write_chunk(OpCode::Unknown as u8, 4);
+
+    vm.chunk.disassemble_chunk("first-chunk");
+
+    // End chunk testing area
 
     match args.get(1) {
         Some(filename) => start_lexer_from_file(filename).expect("Something went wrong while reading the file"),
