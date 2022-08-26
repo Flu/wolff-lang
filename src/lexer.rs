@@ -13,7 +13,7 @@ pub struct TokenStream {
     input: InputStream,
     current: Token,
     has_started: bool,
-    has_error: bool,
+    pub has_error: bool,
 }
 
 #[derive(Clone)]
@@ -144,6 +144,7 @@ impl TokenStream {
         if ch == '"' {
             let string_token = self.read_string();
             if string_token.is_none() {
+                self.has_error = true;
                 return Err(InvalidTokenError {
                     message: format!("Invalid string termination at {}:{}", self.input.line, self.input.col),
                     line_as_string: self.input.get_current_line().to_string(),
@@ -164,6 +165,7 @@ impl TokenStream {
         if is_punctuation(ch) {
             let punctuation_token = self.read_punctuation();
             if punctuation_token.is_none() {
+                self.has_error = true;
                 return Err(InvalidTokenError {
                     message: format!("Invalid operator at {}:{}", self.input.line, self.input.col),
                     line_as_string: self.input.get_current_line().to_string(),

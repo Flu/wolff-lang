@@ -20,7 +20,7 @@ fn main() {
     print_splash_screen();
 
     // Chunk testing area
-    let mut vm = VM::new();
+    let mut vm = VM::new(true, false);
 
     let mut offset = vm.chunk.add_constant(Constant::Integer(45688874));
     vm.chunk.write_chunk(OpCode::Constant as u8, 0);
@@ -41,17 +41,16 @@ fn main() {
     offset = vm.chunk.add_constant(Constant::Float(-5.0));
     vm.chunk.write_chunk(OpCode::Constant as u8, 3);
     vm.chunk.write_chunk(offset, 3);
+
+    vm.chunk.write_chunk(OpCode::Negate as u8, 4);
     
     vm.chunk.write_chunk(OpCode::Return as u8, 4);
-    vm.chunk.write_chunk(OpCode::Unknown as u8, 4);
-    vm.chunk.write_chunk(OpCode::Unknown as u8, 4);
-    vm.chunk.write_chunk(OpCode::Unknown as u8, 4);
 
-    vm.chunk.disassemble_chunk("first-chunk");
+    vm.interpret();
 
     // End chunk testing area
 
-    match args.get(1) {
+    return match args.get(1) {
         Some(filename) => start_lexer_from_file(filename).expect("Something went wrong while reading the file"),
         None => start_prompt().expect("Something went wrong"),
     };
@@ -94,8 +93,8 @@ fn start_prompt() -> Result<()> {
 fn start_lexer_from_file(filename: &String) -> Result<()> {
     let contents = fs::read_to_string(filename.as_str()).expect("Error when opening file");
 
-    start_lexer(&contents);
-    return Result::Ok(())
+    let return_value = start_lexer(&contents);
+    return Result::Ok(return_value)
 }
 
 fn print_error_message(error: &errors::InvalidTokenError) {
@@ -116,4 +115,6 @@ fn start_lexer(contents: &String) {
             }
         };
     }
+
+    println!("There was an error in the tokenizer: {}", lexer.has_error);
 }
