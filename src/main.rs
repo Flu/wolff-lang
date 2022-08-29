@@ -66,7 +66,7 @@ fn main() {
 }
 
 fn print_splash_screen() {
-    println!("\x1b[1mWolff interpreter v0.1.0\x1b[0m");
+    println!("\x1b[1mWolff interpreter v0.1.1\x1b[0m");
 }
 
 fn start_prompt() -> Result<()> {
