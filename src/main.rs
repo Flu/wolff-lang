@@ -5,6 +5,7 @@ extern crate num_traits as num_derived_traits;
 pub mod input_stream;
 pub mod lexer;
 pub mod errors;
+pub mod parser;
 pub mod vm;
 
 use input_stream::InputStream;
@@ -20,7 +21,7 @@ fn main() {
     print_splash_screen();
 
     // Chunk testing area
-    let mut vm = VM::new(true, false);
+    let mut vm = VM::new(true, true);
 
     let mut offset = vm.chunk.add_constant(Constant::Integer(45688874));
     vm.chunk.write_chunk(OpCode::Constant as u8, 0);
@@ -35,18 +36,26 @@ fn main() {
     offset = vm.chunk.add_constant(Constant::Float(4589845542425.2));
     vm.chunk.write_chunk(OpCode::Constant as u8, 3);
     vm.chunk.write_chunk(offset, 3);
-    offset = vm.chunk.add_constant(Constant::Float(1.0));
+    offset = vm.chunk.add_constant(Constant::Integer(10));
     vm.chunk.write_chunk(OpCode::Constant as u8, 3);
     vm.chunk.write_chunk(offset, 3);
-    offset = vm.chunk.add_constant(Constant::Float(-5.0));
+    offset = vm.chunk.add_constant(Constant::Integer(-5));
+    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
+    vm.chunk.write_chunk(offset, 3);
+    offset = vm.chunk.add_constant(Constant::Integer(800));
     vm.chunk.write_chunk(OpCode::Constant as u8, 3);
     vm.chunk.write_chunk(offset, 3);
 
     vm.chunk.write_chunk(OpCode::Negate as u8, 4);
+    vm.chunk.write_chunk(OpCode::Negate as u8, 4);
+
+    vm.chunk.write_chunk(OpCode::Addition as u8, 4);
+    vm.chunk.write_chunk(OpCode::Subtraction as u8, 4);
     
     vm.chunk.write_chunk(OpCode::Return as u8, 4);
 
-    vm.interpret();
+    let result_code = vm.interpret();
+    println!("VM returned status code {}", result_code);
 
     // End chunk testing area
 

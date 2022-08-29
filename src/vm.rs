@@ -1,7 +1,7 @@
 use std::fmt::*;
-use std::ops::Neg;
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Constant {
     Integer(i32),
     Float(f64),
@@ -14,6 +14,73 @@ impl Neg for Constant {
             Constant::Float(val) => Constant::Float(-val),
             Constant::Integer(val) => Constant::Integer(-val),
         };
+    }
+}
+
+impl Add for Constant {
+    type Output = Self;
+    fn add(self, a: Self::Output) -> Self::Output {
+        if let Constant::Float(val_1) = self {
+            if let Constant::Float(val_2) = a {
+                return Constant::Float(val_1 + val_2);
+            }
+        }
+
+        if let Constant::Integer(val_1) = self {
+            if let Constant::Integer(val_2) = a {
+                return Constant::Integer(val_1 + val_2);
+            }
+        }
+
+        dbg!(self);
+        dbg!(a);
+
+        panic!("Can't add two different object types");
+    }
+}
+
+impl Sub for Constant {
+    type Output = Self;
+    fn sub(self, a: Self::Output) -> Self::Output {
+        if let Constant::Float(val_1) = self && let Constant::Float(val_2) = a {
+            return Constant::Float(val_1 - val_2);
+        }
+
+        if let Constant::Integer(val_1) = self && let Constant::Integer(val_2) = a {
+            return Constant::Integer(val_1 - val_2);
+        }
+
+        panic!("Can't subtract two different object types");
+    }
+}
+
+impl Mul for Constant {
+    type Output = Self;
+    fn mul(self, a: Self::Output) -> Self::Output {
+        if let Constant::Float(val_1) = self && let Constant::Float(val_2) = a {
+            return Constant::Float(val_1 * val_2);
+        }
+
+        if let Constant::Integer(val_1) = self && let Constant::Integer(val_2) = a {
+            return Constant::Integer(val_1 * val_2);
+        }
+
+        panic!("Can't multiply two different object types");
+    }
+}
+
+impl Div for Constant {
+    type Output = Self;
+    fn div(self, a: Self::Output) -> Self::Output {
+        if let Constant::Float(val_1) = self && let Constant::Float(val_2) = a {
+            return Constant::Float(val_1 / val_2);
+        }
+
+        if let Constant::Integer(val_1) = self && let Constant::Integer(val_2) = a {
+            return Constant::Integer(val_1 / val_2);
+        }
+
+        panic!("Can't divide two different object types");
     }
 }
 
@@ -55,6 +122,10 @@ pub enum OpCode {
     Return = 0,
     Constant,
     Negate,
+    Addition,
+    Subtraction,
+    Multiplication,
+    Division,
     Unknown,
 }
 
@@ -64,6 +135,11 @@ impl Display for OpCode {
             OpCode::Return => "RETURN",
             OpCode::Constant => "CONST",
             OpCode::Negate => "NEGATE",
+            OpCode::Addition => "ADD",
+            OpCode::Subtraction => "SUB",
+            OpCode::Multiplication => "MUL",
+            OpCode::Division => "DIV",
+
             OpCode::Unknown => "Unknown opcode byte, this is a big nono",
         };
 
@@ -135,6 +211,10 @@ impl Chunk {
             Some(OpCode::Return) => (OpCode::Return.to_string(), 1),
             Some(OpCode::Constant) => (self.constant_instruction(offset), 2),
             Some(OpCode::Negate) => (OpCode::Negate.to_string(), 1),
+            Some(OpCode::Addition) => (OpCode::Addition.to_string(), 1),
+            Some(OpCode::Subtraction) => (OpCode::Subtraction.to_string(), 1),
+            Some(OpCode::Multiplication) => (OpCode::Multiplication.to_string(), 1),
+            Some(OpCode::Division) => (OpCode::Division.to_string(), 1),
             _ => (OpCode::Unknown.to_string(), 1),
         }
     }
@@ -191,15 +271,6 @@ impl VM {
                     self.ip,
                     self.chunk.disassemble_instruction(self.ip).0
                 );
-
-                // If stacktrace is true, print the stack after every instruction as well
-                if self.stacktrace {
-                    println!("---Stacktrace---");
-                    for elem in self.stack.iter() {
-                        print!("{}, ", elem);
-                    }
-                    println!("\n-------");
-                }
             }
 
             // Match the current byte to an OpCode, if it doesn't match, spit out an error, else execute the instruction
@@ -218,8 +289,41 @@ impl VM {
                     self.stack.push(constant);
                     1
                 }
+                Some(OpCode::Addition) => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(a + b);
+                    1
+                }
+                Some(OpCode::Subtraction) => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(a - b);
+                    1
+                }
+                Some(OpCode::Multiplication) => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(a * b);
+                    1
+                }
+                Some(OpCode::Division) => {
+                    let b = self.stack.pop().unwrap();
+                    let a = self.stack.pop().unwrap();
+                    self.stack.push(a / b);
+                    1
+                }
                 Some(OpCode::Unknown) => return 1,
             };
+
+            // If stacktrace is true, print the stack after every instruction as well
+            if self.stacktrace {
+                println!("---Stacktrace---");
+                for elem in self.stack.iter() {
+                    print!("{}, ", elem);
+                }
+                println!("\n-------");
+            }
 
             self.ip += ip_offset;
         }
