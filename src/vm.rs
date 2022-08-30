@@ -116,36 +116,6 @@ pub struct Chunk {
 }
 
 // OpCode code that holds all the information about a specific instruction in the bytecode of our VM
-#[derive(FromPrimitive, ToPrimitive)]
-#[num_traits = "num_derived_traits"]
-pub enum OpCode {
-    Return = 0,
-    Constant,
-    Negate,
-    Addition,
-    Subtraction,
-    Multiplication,
-    Division,
-    Unknown,
-}
-
-impl Display for OpCode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let output_string: &str = match *self {
-            OpCode::Return => "RETURN",
-            OpCode::Constant => "CONST",
-            OpCode::Negate => "NEGATE",
-            OpCode::Addition => "ADD",
-            OpCode::Subtraction => "SUB",
-            OpCode::Multiplication => "MUL",
-            OpCode::Division => "DIV",
-
-            OpCode::Unknown => "Unknown opcode byte, this is a big nono",
-        };
-
-        write!(f, "{}", output_string)
-    }
-}
 
 impl Chunk {
     pub fn new() -> Self {
@@ -215,7 +185,6 @@ impl Chunk {
             Some(OpCode::Subtraction) => (OpCode::Subtraction.to_string(), 1),
             Some(OpCode::Multiplication) => (OpCode::Multiplication.to_string(), 1),
             Some(OpCode::Division) => (OpCode::Division.to_string(), 1),
-            _ => (OpCode::Unknown.to_string(), 1),
         }
     }
 
@@ -274,46 +243,51 @@ impl VM {
             }
 
             // Match the current byte to an OpCode, if it doesn't match, spit out an error, else execute the instruction
-            let ip_offset = match num::FromPrimitive::from_u8(curr_instruction) {
-                None => return 1,
-                Some(OpCode::Return) => {
+            let instruction_op = from_u8_to_op(curr_instruction);
+            if instruction_op.is_none() {
+                return 0;
+            }
+
+            let a = instruction_op.unwrap();
+            
+            let ip_offset = match instruction_op.unwrap() {
+                ReturnOp => {
                     return 0;
                 }
-                Some(OpCode::Constant) => {
+                ConstantOp => {
                     let constant = self.chunk.constant_pool[self.chunk.code[self.ip + 1] as usize];
                     self.stack.push(constant);
                     2
                 }
-                Some(OpCode::Negate) => {
+                NegOp => {
                     let constant = -self.stack.pop().unwrap();
                     self.stack.push(constant);
                     1
                 }
-                Some(OpCode::Addition) => {
+                AddOp => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a + b);
                     1
                 }
-                Some(OpCode::Subtraction) => {
+                SubOp => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a - b);
                     1
                 }
-                Some(OpCode::Multiplication) => {
+                MulOp => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a * b);
                     1
                 }
-                Some(OpCode::Division) => {
+                DivOp => {
                     let b = self.stack.pop().unwrap();
                     let a = self.stack.pop().unwrap();
                     self.stack.push(a / b);
                     1
                 }
-                Some(OpCode::Unknown) => return 1,
             };
 
             // If stacktrace is true, print the stack after every instruction as well
@@ -330,5 +304,137 @@ impl VM {
 
         // If the loop runs zero times, return 0 because technically it executed succesfully
         return 0;
+    }
+}
+
+fn from_u8_to_op<T: OpCode>(op_byte: u8) -> Option<T> {
+    match op_byte {
+        0 => Option::Some(ReturnOp),
+        1 => Option::Some(ConstantOp),
+        2 => Option::Some(NegOp),
+        3 => Option::Some(AddOp),
+        4 => Option::Some(SubOp),
+        5 => Option::Some(MulOp),
+        6 => Option::Some(DivOp),
+        _ => None,
+    }
+}
+
+// Define OpCode trait
+trait OpCode: Display {
+    fn number_of_bytes(&self) -> usize {
+        1
+    }
+
+    fn run(&self, _: &mut Vec<Constant>, _: &mut Vec<Constant>) -> usize {
+        self.number_of_bytes()
+    }
+}
+
+// Return operation - for now, just halts the program
+struct ReturnOp;
+impl OpCode for ReturnOp {}
+
+impl Display for ReturnOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "RETURN")
+    }
+}
+
+// Constant operation - loads a constant (either an int, float) from the constant section onto the stack
+struct ConstantOp;
+impl OpCode for ConstantOp {
+    fn number_of_bytes(&self) -> usize {
+        2
+    }
+}
+
+impl Display for ConstantOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "CONSTANT")
+    }
+}
+
+// Negate operation - pops the stack, negates the element and pushes it back
+struct NegOp;
+impl OpCode for NegOp {
+    fn run(&self, stack: &mut Vec<Constant>, _: &mut Vec<Constant>) -> usize {
+        let a = -stack.pop().unwrap();
+        stack.push(a);
+        self.number_of_bytes()
+    }
+}
+
+impl Display for NegOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "NEG")
+    }
+}
+
+// Addition operation - adds the last two elements on the stack
+struct AddOp;
+impl OpCode for AddOp {
+    fn run(&self, stack: &mut Vec<Constant>, _: &mut Vec<Constant>) -> usize {
+        let b = stack.pop().unwrap();
+        let a = stack.pop().unwrap();
+        stack.push(a + b);
+        self.number_of_bytes()
+    }
+}
+
+impl Display for AddOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "ADD")
+    }
+}
+
+// Subtraction operation - subtracts the last two elements on the stack
+struct SubOp;
+impl OpCode for SubOp {
+    fn run(&self, stack: &mut Vec<Constant>, _: &mut Vec<Constant>) -> usize {
+        let b = stack.pop().unwrap();
+        let a = stack.pop().unwrap();
+        stack.push(a - b);
+        self.number_of_bytes()
+    }
+}
+
+impl Display for SubOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "SUB")
+    }
+}
+
+// Multiplication operation - multiplies the last two elements on the stack 
+struct MulOp;
+impl OpCode for MulOp {
+    fn run(&self, stack: &mut Vec<Constant>, _: &mut Vec<Constant>) -> usize {
+        let b = stack.pop().unwrap();
+        let a = stack.pop().unwrap();
+        stack.push(a * b);
+        self.number_of_bytes()
+    }
+}
+
+impl Display for MulOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "MUL")
+    }
+}
+
+// Division operation - divides the last two elements on the stack 
+struct DivOp;
+impl OpCode for DivOp {
+    fn run(&self, stack: &mut Vec<Constant>, _: &mut Vec<Constant>) -> usize {
+        let b = stack.pop().unwrap();
+        let a = stack.pop().unwrap();
+        stack.push(a / b);
+        self.number_of_bytes()
+    }
+}
+
+impl Display for DivOp {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", "DIV")
     }
 }
