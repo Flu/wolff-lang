@@ -66,7 +66,7 @@ fn main() {
 }
 
 fn print_splash_screen() {
-    println!("\x1b[1mWolff interpreter v0.1.1\x1b[0m");
+    println!("\x1b[1mWolff interpreter {}\x1b[0m", env!("CARGO_PKG_VERSION"));
 }
 
 fn start_prompt() -> Result<()> {

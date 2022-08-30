@@ -1,6 +1,6 @@
 # Maintainer: Adrian Fluturel <adrian.fluturel@protonmail.com>
 pkgname=wolff-lang-git
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 epoch=
 pkgdesc="This is the official bleeding-edge package for the Wolff language interpreter"
@@ -24,12 +24,6 @@ noextract=()
 md5sums=('SKIP')
 validpgpkeys=()
 
-pkgver() {
-    cd wolff-lang
-    git describe --tags | sed 's/^v//;s/[^-]*-g/r&/;s/-/+/g'
-}
-
-
 prepare() {
     cd wolff-lang
     cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
@@ -50,6 +44,6 @@ check() {
 
 package() {
     cd wolff-lang
-    install -Dt "$pkgdir/usr/bin" target/release/wolff-lang
+    install -Dt "$pkgdir/usr/bin/" target/release/wolff-lang
     install -Dt "$pkgdir/usr/share/doc/$pkgname" -m644 README.md
 }
