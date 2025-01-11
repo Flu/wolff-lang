@@ -78,7 +78,7 @@ fn start_lexer(contents: &String) {
 
     while !lexer.eof() {
         match lexer.next() {
-            Ok(new_token) => println!("{}: {}", new_token.token_type, new_token.value),
+            Ok(new_token) => println!("{}: {}", new_token.token_type, new_token.lexeme),
             Err(e) => {
                 print_error_message(&e);
             }

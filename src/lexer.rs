@@ -5,7 +5,8 @@ use regex::Regex;
 use std::fmt;
 
 const KEYWORDS: &'static [&'static str] = &[
-    "if", "else", "lambda", "λ", "true", "false", "while", "loop", "for", "return", "let", "nil", "and", "or", "struct", "this"
+    "and", "class", "else", "false", "fun", "for", "if", "lambda", "nil", "or", "print", "return", "super", "this", "true", "var", "while",
+    "λ"
 ];
 const PUNCTS: &'static [char] = &['(', ')', '{', '}', ',', '.', '-', '+', ';', '+', '-', '*', '/', '%', '=', '&', '|', '^', '<', '>', '!'];
 
@@ -20,7 +21,6 @@ pub struct TokenStream {
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
-    pub literal: Literal,
     pub line: usize,
     pub col: usize,
 }
@@ -49,29 +49,24 @@ pub enum TokenType {
     Less,
     LessEqual,
     // Literals
-    Literal(Literal),
+    Identifier(String),
+    String(String),
+    Number(f64),
     // Keywords
     Keyword(String),
     // EOF token
     EOF,
 }
 
-#[derive(Clone, PartialEq)]
-pub enum Literal {
-    Identifier,
-    String,
-    Number
-}
-
 impl fmt::Display for TokenType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_token = match self {
             // Single character tokens
-            TokenType::LeftParen
-            | TokenType::RightParen
-            | TokenType::LeftBrace
-            | TokenType::RightBrace
-            | TokenType::Comma
+            TokenType::LeftParen => "LeftParen",
+            TokenType::RightParen => "RightParen",
+            TokenType::LeftBrace => "LeftBrace",
+            TokenType::RightBrace => "RightBrace",
+            TokenType::Comma
             | TokenType::Dot
             | TokenType::Minus
             | TokenType::Plus
@@ -79,26 +74,24 @@ impl fmt::Display for TokenType {
             | TokenType::Slash
             | TokenType::Star => "Single punctuation",
             // One or two character tokens
-            TokenType::BangEqual
-            | TokenType::Bang
-            | TokenType::Equal
-            | TokenType::EqualEqual
-            | TokenType::Greater
-            | TokenType::GreaterEqual
-            | TokenType::Less
-            | TokenType::LessEqual => "Punctuation",
+            TokenType::BangEqual => "BangEqual",
+            TokenType::Bang => "Bang",
+            TokenType::Equal => "Equal",
+            TokenType::EqualEqual => "EqualEqual",
+            TokenType::Greater => "Greater",
+            TokenType::GreaterEqual => "GreaterEqual",
+            TokenType::Less => "Less",
+            TokenType::LessEqual => "LessEqual",
             // Literals
-            TokenType::Literal(lit) => match lit {
-                Literal::Number => "Number",
-                Literal::Identifier => "Identifier",
-                Literal::String => "String"
-            }
+            TokenType::Identifier(_) => "Identifier",
+            TokenType::String(_) => "String",
+            TokenType::Number(_) => "Number",
             // Keywords
             TokenType::Keyword(_) => "Keyword",
             // EOF token
             TokenType::EOF => "EOF",
         };
-        write!(f, "{}", string_token)
+        write!(f, "{}", string_token.to_owned())
     }
 }
 
@@ -109,11 +102,10 @@ impl Default for TokenType {
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: &String, literal: &Literal, line: usize, col: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: &String, line: usize, col: usize) -> Self {
         Token {
             token_type,
             lexeme: lexeme.to_owned(),
-            literal: literal.to_owned(),
             line,
             col
         }
@@ -136,7 +128,7 @@ impl TokenStream {
 
         // If input is EOF, return EOF token
         if self.input.eof() {
-            return Ok(Token::new(TokenType::Eof, &String::default(), self.input.line, self.input.col));
+            return Ok(Token::new(TokenType::EOF, &String::default(), self.input.line, self.input.col));
         }
 
         // Peek at the next character in the input stream to figure out what we need to do
@@ -217,7 +209,8 @@ impl TokenStream {
         if return_string.is_none() {
             return None;
         } else {
-            return Some(Token::new(TokenType::String, &return_string.unwrap(), self.input.line, self.input.col));
+            let unwrapped_string = return_string.unwrap();
+            return Some(Token::new(TokenType::String(unwrapped_string.clone()), &unwrapped_string, self.input.line, self.input.col));
         }
     }
 
@@ -257,13 +250,15 @@ impl TokenStream {
             return ch.is_digit(10);
         });
 
+        let s: f64 = number.parse().unwrap();
+        // TODO: The behaviour is the same for float and int, in the future, divide them
         // If it is an integer, return an integer token
         if !has_dec_point {
-            return Token::new(TokenType::Integer, &number, self.input.line, self.input.col)
+            return Token::new(TokenType::Number(s), &number, self.input.line, self.input.col)
         }
 
         // Otherwise return a float token
-        Token::new(TokenType::Numeral, &number, self.input.line, self.input.col)
+        Token::new(TokenType::Number(s), &number, self.input.line, self.input.col)
     }
 
     fn read_ident(&mut self) -> Token {
@@ -271,9 +266,9 @@ impl TokenStream {
 
         Token::new(
             if is_keyword(&identifier) {
-                TokenType::Keyword
+                TokenType::Keyword(identifier.clone())
             } else {
-                TokenType::Identifier
+                TokenType::Identifier(identifier.clone())
             },
             &identifier,
             self.input.line,
@@ -294,10 +289,10 @@ impl TokenStream {
             '{' => TokenType::LeftBrace,
             '}' => TokenType::RightBrace,
             '.' => TokenType::Dot,
-            _ => TokenType::Eof,
+            _ => TokenType::EOF,
         };
 
-        if single_token_type != TokenType::Eof {
+        if single_token_type != TokenType::EOF {
             return Some(Token::new(single_token_type, &self.input.next().to_string(), self.input.line, self.input.col));
         }
 
@@ -345,7 +340,7 @@ impl TokenStream {
     }
 
     pub fn eof(&mut self) -> bool {
-        !self.peek().is_none() && self.peek().unwrap().token_type == TokenType::Eof
+        !self.peek().is_none() && self.peek().unwrap().token_type == TokenType::EOF
     }
 }
 
