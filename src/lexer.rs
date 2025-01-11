@@ -25,7 +25,7 @@ pub struct Token {
     pub col: usize,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenType {
     // Single character tokens
     LeftParen,
@@ -364,4 +364,214 @@ fn is_whitespace(ch: char) -> bool {
 
 fn is_id(ch: char) -> bool {
     is_id_start(ch) || "-!?0123456789".contains(ch)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Import the module you're testing
+
+    #[test]
+    fn test_tokenizer_simple_input() {
+        let input = "1 + 2".to_string();
+        
+        let result_of_lexer = run_lexer(&input);
+        match result_of_lexer {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 4);
+
+                // Verify specific tokens
+                assert_eq!(tokens[0].token_type, TokenType::Number(1.0));
+                assert_eq!(tokens[1].token_type, TokenType::Plus);
+                assert_eq!(tokens[2].token_type, TokenType::Number(2.0));
+                assert_eq!(tokens[3].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_lexer_with_invalid_input() {
+        let input = "1 + @".to_string();
+        let result = run_lexer(&input);
+
+        match result {
+            Ok(_) => panic!("Expected an error, but got tokens"),
+            Err(e) => assert!(e.contains("Lexer error")),
+        }
+    }
+
+    #[test]
+    fn test_tokenizer_multiple_operators() {
+        let input = "3 * (4 - 2) / 7".to_string();
+        
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 10); // Tokens: 3, *, (, 4, -, 2, ), /, EOF
+
+                assert_eq!(tokens[0].token_type, TokenType::Number(3.0));
+                assert_eq!(tokens[1].token_type, TokenType::Star);
+                assert_eq!(tokens[2].token_type, TokenType::LeftParen);
+                assert_eq!(tokens[3].token_type, TokenType::Number(4.0));
+                assert_eq!(tokens[4].token_type, TokenType::Minus);
+                assert_eq!(tokens[5].token_type, TokenType::Number(2.0));
+                assert_eq!(tokens[6].token_type, TokenType::RightParen);
+                assert_eq!(tokens[7].token_type, TokenType::Slash);
+                assert_eq!(tokens[8].token_type, TokenType::Number(7.0));
+                assert_eq!(tokens[9].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_tokenizer_keywords() {
+        let input = "if else while for".to_string();
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 5); // Keywords + EOF
+                
+                assert_eq!(tokens[0].token_type, TokenType::Keyword("if".to_string()));
+                assert_eq!(tokens[1].token_type, TokenType::Keyword("else".to_string()));
+                assert_eq!(tokens[2].token_type, TokenType::Keyword("while".to_string()));
+                assert_eq!(tokens[3].token_type, TokenType::Keyword("for".to_string()));
+                assert_eq!(tokens[4].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_tokenizer_strings() {
+        let input = "\"hello\" + \"world\"".to_string();
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 4); // Strings + Plus + EOF
+
+                assert_eq!(tokens[0].token_type, TokenType::String("hello".to_string()));
+                assert_eq!(tokens[1].token_type, TokenType::Plus);
+                assert_eq!(tokens[2].token_type, TokenType::String("world".to_string()));
+                assert_eq!(tokens[3].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_lexer_empty_input() {
+        let input = "".to_string();
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 1); // Only EOF token
+                assert_eq!(tokens[0].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_lexer_unterminated_string() {
+        let input = "\"hello".to_string(); // Unterminated string
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(_) => panic!("Expected an error, but got tokens"),
+            Err(e) => assert!(e.contains("Lexer error")), // Ensure an error is returned
+        }
+    }
+
+    #[test]
+    fn test_lexer_handles_whitespace() {
+        let input = "  12   +   3   ".to_string(); // Input with extra spaces
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 4); // Numbers, operator, and EOF
+
+                assert_eq!(tokens[0].token_type, TokenType::Number(12.0));
+                assert_eq!(tokens[1].token_type, TokenType::Plus);
+                assert_eq!(tokens[2].token_type, TokenType::Number(3.0));
+                assert_eq!(tokens[3].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_lexer_invalid_character_in_expression() {
+        let input = "5 + 3 $".to_string(); // Invalid character '$'
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(_) => panic!("Expected an error, but got tokens"),
+            Err(e) => assert!(e.contains("Lexer error")), // Ensure an error is returned
+        }
+    }
+
+    #[test]
+    fn test_lexer_nested_parentheses() {
+        let input = "( ( 1 + 2 ) * 3 )".to_string(); // Nested parentheses
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 10); // Tokens + EOF
+
+                assert_eq!(tokens[0].token_type, TokenType::LeftParen);
+                assert_eq!(tokens[1].token_type, TokenType::LeftParen);
+                assert_eq!(tokens[2].token_type, TokenType::Number(1.0));
+                assert_eq!(tokens[3].token_type, TokenType::Plus);
+                assert_eq!(tokens[4].token_type, TokenType::Number(2.0));
+                assert_eq!(tokens[5].token_type, TokenType::RightParen);
+                assert_eq!(tokens[6].token_type, TokenType::Star);
+                assert_eq!(tokens[7].token_type, TokenType::Number(3.0));
+                assert_eq!(tokens[8].token_type, TokenType::RightParen);
+                assert_eq!(tokens[9].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_lexer_large_numbers() {
+        let input = "1234567890 + 9876543210".to_string();
+
+        let result = run_lexer(&input);
+        match result {
+            Ok(tokens) => {
+                assert_eq!(tokens.len(), 4); // Numbers + Plus + EOF
+
+                assert_eq!(tokens[0].token_type, TokenType::Number(1234567890.0));
+                assert_eq!(tokens[1].token_type, TokenType::Plus);
+                assert_eq!(tokens[2].token_type, TokenType::Number(9876543210.0));
+                assert_eq!(tokens[3].token_type, TokenType::EOF);
+            },
+            Err(e) => panic!("Unexpected error: {}", e),
+        }
+    }
+
+    // Abstraction for running the lexer for an arbitrary input, for testing only
+    fn run_lexer(input: &String) -> Result<Vec<Token>, String> {
+        let mut input_stream = InputStream::new(input);
+        let mut lexer = TokenStream::new(&mut input_stream);
+
+        let mut tokens = Vec::new();
+        while !lexer.eof() {
+            match lexer.next() {
+                Ok(new_token) => tokens.push(new_token),
+                Err(e) => {
+                    return Err(format!("Lexer error: {}", e));
+                }
+            }
+        }
+
+        Ok(tokens)
+    }
 }

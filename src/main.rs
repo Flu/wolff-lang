@@ -84,6 +84,4 @@ fn start_lexer(contents: &String) {
             }
         };
     }
-
-    println!("There was an error in the tokenizer: {}", lexer.has_error);
 }
