@@ -4,7 +4,7 @@
 ## Description
 This is the main source repository for the Wolff compiler.
 
-Wolff is both the compiler and the name of the language. It is a LISP-like language that is strongly-typed and has immutability in mind. The compiler is written in Rust as a self-learning exercise, both for compiler theory and implementation language. Once the compiler evolves, maybe we will bootstrap it. Or maybe it will gain sentience.
+Wolff is both the compiler and the name of the language. It will be a LISP-like language that is strongly-typed and has immutability in mind. The compiler is written in Rust as a self-learning exercise, both for compiler theory and implementation language. Once the compiler evolves, maybe we will bootstrap it. Or maybe it will gain sentience.
 
 ## Quick start
 I will asume you are using GNU/Linux (otherwise, why are you here?).
