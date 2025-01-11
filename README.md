@@ -1,5 +1,4 @@
 # Wolff
----------
 ![example workflow](https://github.com/Flu/wolff-lang/actions/workflows/build.yml/badge.svg)
 ![example workflow](https://github.com/Flu/wolff-lang/actions/workflows/tests.yml/badge.svg)
 ## Description
@@ -18,6 +17,8 @@ Then:
 3. `rustup update && rustup install nightly`
 4. `rustup override set nightly`
 5. `cargo build`
+
+It is possible that this might work similarly on Windows and Mac.
 
 ### Opening a prompt
 

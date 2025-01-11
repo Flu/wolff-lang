@@ -19,7 +19,8 @@ pub struct TokenStream {
 #[derive(Clone)]
 pub struct Token {
     pub token_type: TokenType,
-    pub value: String,
+    pub lexeme: String,
+    pub literal: Literal,
     pub line: usize,
     pub col: usize,
 }
@@ -48,14 +49,18 @@ pub enum TokenType {
     Less,
     LessEqual,
     // Literals
+    Literal(Literal),
+    // Keywords
+    Keyword(String),
+    // EOF token
+    EOF,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum Literal {
     Identifier,
     String,
-    Integer,
-    Numeral,
-    // Keywords
-    Keyword,
-    // EOF token
-    Eof,
+    Number
 }
 
 impl fmt::Display for TokenType {
@@ -83,14 +88,15 @@ impl fmt::Display for TokenType {
             | TokenType::Less
             | TokenType::LessEqual => "Punctuation",
             // Literals
-            TokenType::Integer => "Integer",
-            TokenType::Numeral => "Numeral",
-            TokenType::String => "String",
-            TokenType::Identifier => "Identifier",
+            TokenType::Literal(lit) => match lit {
+                Literal::Number => "Number",
+                Literal::Identifier => "Identifier",
+                Literal::String => "String"
+            }
             // Keywords
-            TokenType::Keyword => "Keyword",
+            TokenType::Keyword(_) => "Keyword",
             // EOF token
-            TokenType::Eof => "EOF",
+            TokenType::EOF => "EOF",
         };
         write!(f, "{}", string_token)
     }
@@ -98,15 +104,16 @@ impl fmt::Display for TokenType {
 
 impl Default for TokenType {
     fn default() -> Self {
-        TokenType::Eof
+        TokenType::EOF
     }
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, value: &String, line: usize, col: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: &String, literal: &Literal, line: usize, col: usize) -> Self {
         Token {
             token_type,
-            value: value.to_owned(),
+            lexeme: lexeme.to_owned(),
+            literal: literal.to_owned(),
             line,
             col
         }

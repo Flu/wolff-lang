@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate num_derive;
 extern crate num_traits as num_derived_traits;
 
@@ -6,11 +5,10 @@ pub mod input_stream;
 pub mod lexer;
 pub mod errors;
 pub mod parser;
-pub mod vm;
 
 use input_stream::InputStream;
 use lexer::TokenStream;
-use vm::{VM, OpCode, Constant};
+use rustyline::history::FileHistory;
 use std::env;
 use std::fs;
 use rustyline::error::ReadlineError;
@@ -19,45 +17,6 @@ use rustyline::{Editor, Result};
 fn main() {
     let args: Vec<String> = env::args().collect();
     print_splash_screen();
-
-    // Chunk testing area
-    let mut vm = VM::new(true, true);
-
-    let mut offset = vm.chunk.add_constant(Constant::Integer(45688874));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 0);
-    vm.chunk.write_chunk(offset, 0);
-
-    offset = vm.chunk.add_constant(Constant::Float(1.2356));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 1);
-    vm.chunk.write_chunk(offset, 1);
-    offset = vm.chunk.add_constant(Constant::Float(256.235444));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 2);
-    vm.chunk.write_chunk(offset, 2);
-    offset = vm.chunk.add_constant(Constant::Float(4589845542425.2));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
-    vm.chunk.write_chunk(offset, 3);
-    offset = vm.chunk.add_constant(Constant::Integer(10));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
-    vm.chunk.write_chunk(offset, 3);
-    offset = vm.chunk.add_constant(Constant::Integer(-5));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
-    vm.chunk.write_chunk(offset, 3);
-    offset = vm.chunk.add_constant(Constant::Integer(800));
-    vm.chunk.write_chunk(OpCode::Constant as u8, 3);
-    vm.chunk.write_chunk(offset, 3);
-
-    vm.chunk.write_chunk(OpCode::Negate as u8, 4);
-    vm.chunk.write_chunk(OpCode::Negate as u8, 4);
-
-    vm.chunk.write_chunk(OpCode::Addition as u8, 4);
-    vm.chunk.write_chunk(OpCode::Subtraction as u8, 4);
-    
-    vm.chunk.write_chunk(OpCode::Return as u8, 4);
-
-    let result_code = vm.interpret();
-    println!("VM returned status code {}", result_code);
-
-    // End chunk testing area
 
     return match args.get(1) {
         Some(filename) => start_lexer_from_file(filename).expect("Something went wrong while reading the file"),
@@ -71,15 +30,16 @@ fn print_splash_screen() {
 
 fn start_prompt() -> Result<()> {
 
-    let mut rl = Editor::<()>::new()?;
+    let mut rl = Editor::<(), FileHistory>::new()?;
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
     loop {
-        let readline = rl.readline("\x1b[1mλ \x1b[0m");
+        let readline = rl.readline("\x1b[1mλ\x1b[0m ");
+
         match readline {
             Ok(line) => {
-                rl.add_history_entry(line.as_str());
+                let _ = rl.add_history_entry(line.as_str());
                 start_lexer(&line);
             },
             Err(ReadlineError::Interrupted) => {
