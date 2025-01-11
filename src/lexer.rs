@@ -4,6 +4,7 @@ use crate::input_stream::InputStream;
 use regex::Regex;
 use std::fmt;
 
+// VERY IMPORTANT that this list stays ordered lexicographically, otherwise the lexer breaks
 const KEYWORDS: &'static [&'static str] = &[
     "and", "class", "else", "false", "fun", "for", "if", "lambda", "nil", "or", "print", "return", "super", "this", "true", "var", "while",
     "λ"
@@ -17,7 +18,7 @@ pub struct TokenStream {
     pub has_error: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
@@ -66,13 +67,13 @@ impl fmt::Display for TokenType {
             TokenType::RightParen => "RightParen",
             TokenType::LeftBrace => "LeftBrace",
             TokenType::RightBrace => "RightBrace",
-            TokenType::Comma
-            | TokenType::Dot
-            | TokenType::Minus
-            | TokenType::Plus
-            | TokenType::Semicolon
-            | TokenType::Slash
-            | TokenType::Star => "Single punctuation",
+            TokenType::Comma => "Comma",
+            TokenType::Dot => "Dot",
+            TokenType::Minus => "Minus",
+            TokenType::Plus => "Plus",
+            TokenType::Semicolon => "Semicolon",
+            TokenType::Slash => "Slash",
+            TokenType::Star => "Star",
             // One or two character tokens
             TokenType::BangEqual => "BangEqual",
             TokenType::Bang => "Bang",

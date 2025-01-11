@@ -7,14 +7,60 @@ pub mod errors;
 pub mod parser;
 
 use input_stream::InputStream;
+use lexer::Token;
 use lexer::TokenStream;
+use lexer::TokenType;
+use parser::LiteralValue;
 use rustyline::history::FileHistory;
 use std::env;
 use std::fs;
 use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
+use parser::{AstPrinter, Expr};
 
 fn main() {
+    // Create tokens
+    let plus_token = Token {
+        lexeme: "+".to_string(),
+        token_type: TokenType::Plus,
+        line: 0,
+        col: 0
+    };
+
+    let star_token = Token {
+        lexeme: "*".to_string(),
+        token_type: TokenType::Star,
+        line: 0,
+        col: 0
+    };
+
+    // Build the AST
+    let inner_expr = Expr::Binary {
+        left: Box::new(Expr::Literal {
+            value: LiteralValue::Number(2.0),
+        }),
+        operator: star_token,
+        right: Box::new(Expr::Literal {
+            value: LiteralValue::Number(3.0),
+        }),
+    };
+
+    let outer_expr = Expr::Binary {
+        left: Box::new(Expr::Literal {
+            value: LiteralValue::Number(1.0),
+        }),
+        operator: plus_token,
+        right: Box::new(Expr::Grouping {
+            expression: Box::new(inner_expr),
+        }),
+    };
+
+    // Pretty print the AST
+    let mut printer = AstPrinter;
+    let result = outer_expr.accept(&mut printer);
+
+    println!("{}", result);
+
     let args: Vec<String> = env::args().collect();
     print_splash_screen();
 
@@ -78,6 +124,7 @@ fn start_lexer(contents: &String) {
 
     while !lexer.eof() {
         match lexer.next() {
+            Ok(Token { token_type: lexer::TokenType::EOF, line: _, col: _, lexeme: _}) => println!("EOF reached"),
             Ok(new_token) => println!("{}: {}", new_token.token_type, new_token.lexeme),
             Err(e) => {
                 print_error_message(&e);
