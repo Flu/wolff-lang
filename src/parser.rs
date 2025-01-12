@@ -1,4 +1,8 @@
+use core::panic;
+
 use crate::lexer::*;
+
+use crate::errors::ParserError;
 
 pub trait Visitor<T> {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
@@ -30,6 +34,8 @@ pub enum Expr {
 pub enum LiteralValue {
     Number(f64),
     Text(String),
+    True,
+    False,
     Nil,
 }
 
@@ -70,6 +76,8 @@ impl Visitor<String> for AstPrinter {
         match value {
             LiteralValue::Number(num) => num.to_string(),
             LiteralValue::Text(text) => format!("\"{}\"", text),
+            LiteralValue::True => "true".to_string(),
+            LiteralValue::False => "false".to_string(),
             LiteralValue::Nil => "nil".to_string(),
         }
     }
@@ -77,53 +85,192 @@ impl Visitor<String> for AstPrinter {
 
 struct Parser<'a> {
     current: usize,
-    token_vector: &'a Vec<Token>,
+    tokens: &'a Vec<Token>,
     had_error: bool,
     panic_mode: bool,
 }
 
 impl<'a> Parser<'a> {
-
-    #[allow(dead_code)]
     pub fn new(token_vector: &'a Vec<Token>) -> Self {
         Parser {
             current: 0,
-            token_vector,
+            tokens: token_vector,
             had_error: false,
             panic_mode: false
         }
     }
 
-    #[allow(dead_code)]
     pub fn compile(&self) -> bool {
 
         !self.had_error
     }
 
-    #[allow(dead_code)]
-    pub fn error_at(&mut self, token: &Token, message: &str) {
-        if self.panic_mode {
-            return;
+    pub fn advance(&mut self) -> Token {
+        if !self.is_at_end() {
+            self.current += 1;
         }
-        self.panic_mode = true;
-
-        println!("Error at {}:{}", token.line, token.col);
-        println!("{}", message);
-        self.had_error = true;
+        return self.previous();
     }
 
-    #[allow(dead_code)]
-    pub fn advance(&mut self) {
-        self.current += 1;
-    }
-
-    #[allow(dead_code)]
-    pub fn consume(&mut self, token_type: TokenType, message: &str) {
-        if self.token_vector[self.current].token_type == token_type {
-            self.advance();
-            return;
+    pub fn consume(&mut self, token_type: TokenType, message: &str) -> Result<Token, ParserError> {
+        if self.check(&token_type) {
+            return Ok(self.advance());
         }
         
-        self.error_at(&self.token_vector[self.current], message);
+        let token = self.peek();
+        Err(ParserError {
+            message: message.to_string(),
+            line: token.line,
+            col: token.col
+        })
+    }
+
+    fn expression(&mut self) -> Result<Expr, ParserError> {
+        self.equality()
+    }
+
+    fn equality(&mut self) -> Result<Expr, ParserError> {
+        let mut expr: Expr = self.comparison()?;
+
+        while self.match_tokens(&[TokenType::BangEqual, TokenType::EqualEqual]) {
+            let operator: Token = self.previous();
+            let right: Expr = self.comparison()?;
+
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right)
+            };
+        }
+
+        return Ok(expr);
+    }
+
+    fn comparison(&mut self) -> Result<Expr, ParserError> {
+        let mut expr: Expr = self.term()?;
+
+        while self.match_tokens(&[TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual]) {
+            let operator: Token = self.previous();
+            let right: Expr = self.term()?;
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+        }
+
+        return Ok(expr);
+    }
+
+    fn term(&mut self) -> Result<Expr, ParserError> {
+        let mut expr: Expr = self.factor()?;
+
+        while self.match_tokens(&[TokenType::Minus, TokenType::Plus]) {
+            let operator: Token = self.previous();
+            let right: Expr = self.factor()?;
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+        }
+
+        return Ok(expr);
+    }
+
+    fn factor(&mut self) -> Result<Expr, ParserError> {
+        let mut expr: Expr = self.unary()?;
+
+        while self.match_tokens(&[TokenType::Slash, TokenType::Star]) {
+            let operator: Token = self.previous();
+            let right: Expr = self.unary()?;
+            expr = Expr::Binary { left: Box::new(expr), operator, right: Box::new(right) };
+        }
+
+        return Ok(expr);
+    }
+
+    fn unary(&mut self) -> Result<Expr, ParserError> {
+        if self.match_tokens(&[TokenType::Bang, TokenType::Minus]) {
+            let operator: Token = self.previous();
+            let right: Expr = self.unary()?;
+
+            return Ok(Expr::Unary {
+                operator,
+                right: Box::new(right)
+            });
+        }
+        return self.primary();
+    }
+
+    fn primary(&mut self) -> Result<Expr, ParserError> {
+        if self.match_tokens(&[TokenType::Identifier("true".to_string())]) {
+            return Ok(Expr::Literal {
+                value: LiteralValue::True
+            });
+        }
+
+        if self.match_tokens(&[TokenType::Identifier("false".to_string())]) {
+            return Ok(Expr::Literal {
+                value: LiteralValue::False
+            });
+        }
+
+        if self.match_tokens(&[TokenType::Identifier("nil".to_string())]) {
+            return Ok(Expr::Literal {
+                value: LiteralValue::Nil
+            });
+        }
+
+        if self.match_tokens(&[TokenType::Number(0.0)]) {
+            match self.previous() {
+                Token { token_type: TokenType::Number(number), lexeme: _, line: _, col: _ } => 
+                    return Ok(Expr::Literal {
+                        value: LiteralValue::Number(number)
+                    }),
+                _ => panic!("Something went terribly wrong in parsing. Expecting a number.")
+            };
+        }
+
+        if self.match_tokens(&[TokenType::String("".to_string())]) {
+            match self.previous() {
+                Token { token_type: TokenType::String(string), lexeme: _, line: _, col: _ } =>
+                    return Ok(Expr::Literal {
+                        value: LiteralValue::Text(string)
+                    }),
+                _ => panic!("Something went terribly wrong in parsing. Expectin a string literal.")
+            };
+        }
+
+        if self.match_tokens(&[TokenType::LeftParen]) {
+            let expr: Expr = self.expression()?;
+            self.consume(TokenType::RightParen, "Expected ')' after expression.")?;
+            return Ok(Expr::Grouping {
+                expression: Box::new(expr)
+            });
+        }
+
+        panic!("Non-exhaustive matching for expression in parser. Panicking");
+    }
+
+    fn match_tokens(&mut self, token_types: &[TokenType]) -> bool {
+        for token_type in token_types {
+            if self.check(&token_type) {
+                self.advance();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn check(&self, token_type: &TokenType) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+        return std::mem::discriminant(&self.peek().token_type) == std::mem::discriminant(token_type);
+    }
+
+    fn is_at_end(&self) -> bool {
+        return self.peek().token_type == TokenType::EOF;
+    }
+
+    fn peek(&self) -> Token {
+        return self.tokens[self.current].clone();
+    }
+
+    fn previous(&self) -> Token {
+        return self.tokens[self.current-1].clone();
     }
 }

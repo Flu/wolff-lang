@@ -24,3 +24,9 @@ impl fmt::Display for InvalidTokenError {
         )
     }
 }
+
+pub struct ParserError {
+    pub message: String,
+    pub line: usize,
+    pub col: usize
+} 
