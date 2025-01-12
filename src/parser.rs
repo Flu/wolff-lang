@@ -1,14 +1,28 @@
 use core::panic;
 
 use crate::lexer::*;
-
 use crate::errors::{ParserError, InterpreterRuntimeError};
 
-pub trait Visitor<T> {
+pub trait ExprVisitor<T> {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
     fn visit_grouping_expr(&mut self, expression: &Expr) -> T;
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> T;
     fn visit_literal_expr(&mut self, value: &LiteralValue) -> T;
+}
+
+pub trait StmtVisitor<T> {
+    fn visit_stmt_expr(&mut self, expr: &Expr) -> T;
+    fn visit_print_expr(&mut self, expr: &Expr) -> T;
+}
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Expression {
+        expression: Expr
+    },
+    Print {
+        expression: Expr
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -40,7 +54,7 @@ pub enum LiteralValue {
 
 impl Expr {
     /// Accept a visitor for traversing this expression
-    pub fn accept<T>(&self, visitor: &mut dyn Visitor<T>) -> T {
+    pub fn accept<T>(&self, visitor: &mut dyn ExprVisitor<T>) -> T {
         match self {
             Expr::Binary { left, operator, right } => {
                 visitor.visit_binary_expr(left, operator, right)
@@ -52,9 +66,18 @@ impl Expr {
     }
 }
 
+impl Stmt {
+    pub fn accept<T>(&self, visitor: &mut dyn StmtVisitor<T>) -> T {
+        match self {
+            Stmt::Expression { expression } => visitor.visit_stmt_expr(expression),
+            Stmt::Print { expression } => visitor.visit_print_expr(expression)
+        }
+    }
+}
+
 pub struct AstPrinter;
 
-impl Visitor<String> for AstPrinter {
+impl ExprVisitor<String> for AstPrinter {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> String {
         let left_str = left.accept(self);
         let right_str = right.accept(self);
@@ -81,9 +104,21 @@ impl Visitor<String> for AstPrinter {
     }
 }
 
+impl StmtVisitor<String> for AstPrinter {
+    fn visit_print_expr(&mut self, expr: &Expr) -> String {
+        let expr_str = expr.accept(self);
+        format!("(print_stmt {expr_str})")
+    }
+
+    fn visit_stmt_expr(&mut self, expr: &Expr) -> String {
+        let expr_str = expr.accept(self);
+        format!("(expr_stmt {expr_str})")
+    }
+}
+
 pub struct AstInterpreter;
 
-impl Visitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
+impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
     fn visit_literal_expr(&mut self, value: &LiteralValue) -> Result<LiteralValue, InterpreterRuntimeError> {
         Ok(value.clone())
     }
@@ -109,7 +144,7 @@ impl Visitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
                 return Ok(LiteralValue::Number(-number));
             }
             _ => return Err(InterpreterRuntimeError {
-                message: "Illegal operation for type".to_string(),
+                message: format!("Illegal use of {} for operand", operator.lexeme),
                 line: operator.line,
                 col: operator.col
             })
@@ -191,6 +226,25 @@ impl Visitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
     }
 }
 
+impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
+    fn visit_print_expr(&mut self, expr: &Expr) -> Result<(), InterpreterRuntimeError> {
+        let lit_value = self.evaluate(expr)?;
+
+        match lit_value {
+            LiteralValue::Number(number) => println!("{number}"),
+            LiteralValue::Text(string) => println!("{string}"),
+            LiteralValue::Bool(boolean) => println!("{boolean}"),
+            LiteralValue::Nil => println!("nil"),
+        }
+        Ok(())
+    }
+
+    fn visit_stmt_expr(&mut self, expr: &Expr) -> Result<(), InterpreterRuntimeError> {
+        self.evaluate(expr)?;
+        Ok(())
+    }
+}
+
 impl AstInterpreter {
     fn evaluate(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
         return expression.accept(self);
@@ -214,20 +268,46 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Vec<Result<Expr, ParserError>> {
-        let mut expressions = Vec::new();
+    pub fn parse(&mut self) -> Vec<Result<Stmt, ParserError>> {
+        let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            match self.expression() {
-                Ok(expr) => expressions.push(Ok(expr)),
+            match self.statement() {
+                Ok(stmt) => statements.push(Ok(stmt)),
                 Err(e) => {
-                    expressions.push(Err(e));
+                     statements.push(Err(e));
                     self.synchronize();
                 }
             }
         }
 
-        expressions
+        statements
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParserError> {
+        if self.match_tokens_with_value(&[TokenType::Keyword("print".to_string())]) {
+            return self.print_statement();
+        }
+
+        self.expression_statement()
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, ParserError> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expected ; after statement.")?;
+
+        return Ok(Stmt::Print {
+            expression: expr
+        });
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, ParserError> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expected ; after expression.")?;
+
+        return Ok(Stmt::Expression {
+            expression: expr
+        })
     }
 
     fn synchronize(&mut self) {

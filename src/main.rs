@@ -72,15 +72,13 @@ fn interpret_string(source_code: &String) {
         println!("The lexer finished with errors. Aborting.");
         return;
     }
-    print_text_with_green(&"All tokens".to_string());
-    println!("{:?}", tokens);
 
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
     println!("{}", result.len());
 
-    for expr in result.iter() {
-        match &expr {
+    for stmt in result.iter() {
+        match &stmt {
             Ok(a) => {
                 let mut printer = AstPrinter;
                 let result = a.accept(&mut printer);
