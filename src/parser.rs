@@ -2,7 +2,7 @@ use core::panic;
 
 use crate::lexer::*;
 
-use crate::errors::ParserError;
+use crate::errors::{ParserError, InterpreterRuntimeError};
 
 pub trait Visitor<T> {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
@@ -34,8 +34,7 @@ pub enum Expr {
 pub enum LiteralValue {
     Number(f64),
     Text(String),
-    True,
-    False,
+    Bool(bool),
     Nil,
 }
 
@@ -76,10 +75,125 @@ impl Visitor<String> for AstPrinter {
         match value {
             LiteralValue::Number(num) => num.to_string(),
             LiteralValue::Text(text) => format!("\"{}\"", text),
-            LiteralValue::True => "true".to_string(),
-            LiteralValue::False => "false".to_string(),
+            LiteralValue::Bool(boolean) => boolean.to_string(),
             LiteralValue::Nil => "nil".to_string(),
         }
+    }
+}
+
+pub struct AstInterpreter;
+
+impl Visitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
+    fn visit_literal_expr(&mut self, value: &LiteralValue) -> Result<LiteralValue, InterpreterRuntimeError> {
+        Ok(value.clone())
+    }
+
+    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
+        self.evaluate(expression)
+    }
+
+    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
+        let right_value = self.evaluate(right)?;
+
+        match (operator, right_value) {
+            (Token { token_type: TokenType::Bang, lexeme: _, line: _, col: _}, LiteralValue::Bool(boolean)) => {
+                return Ok(LiteralValue::Bool(!boolean));
+            }
+            (Token { token_type: TokenType::Bang, lexeme: _, line: _, col: _}, LiteralValue::Nil) => {
+                return Ok(LiteralValue::Bool(true));
+            }
+            (Token { token_type: TokenType::Bang, lexeme: _, line: _, col: _}, _) => {
+                return Ok(LiteralValue::Bool(false));
+            }
+            (Token { token_type: TokenType::Minus, lexeme: _, line: _, col: _}, LiteralValue::Number(number)) => {
+                return Ok(LiteralValue::Number(-number));
+            }
+            _ => return Err(InterpreterRuntimeError {
+                message: "Illegal operation for type".to_string(),
+                line: operator.line,
+                col: operator.col
+            })
+        }
+    }
+
+    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
+        let left_value = self.evaluate(left)?;
+        let right_value = self.evaluate(right)?;
+
+        match (operator, left_value, right_value) {
+            // MINUS OPERATOR
+            (Token { token_type: TokenType::Minus, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Number(rhs - lhs));
+            },
+            // SLASH OPERATOR
+            (Token { token_type: TokenType::Slash, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Number(rhs / lhs));
+            },
+            // PLUS OPERATOR
+            (Token { token_type: TokenType::Plus, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Number(rhs + lhs));
+            },
+            // STAR OPERATOR
+            (Token { token_type: TokenType::Star, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Number(rhs * lhs));
+            },
+            (Token { token_type: TokenType::Star, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Text(lhs)) => {
+                // TODO: this is a truncating cast. When implementing integers, be careful for such uses
+                return Ok(LiteralValue::Text(lhs.repeat(rhs as usize)));
+            },
+            // PLUS OPERATOR FOR STRINGS
+            (Token { token_type: TokenType::Plus, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
+                return Ok(LiteralValue::Text(format!("{}{}", rhs, lhs)));
+            },
+            // GREATER THAN OPERATOR
+            (Token { token_type: TokenType::Greater, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs > lhs));
+            },
+            (Token { token_type: TokenType::Greater, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs > lhs));
+            },
+            // GREATER OR EQUAL THAN OPERATOR
+            (Token { token_type: TokenType::GreaterEqual, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs >= lhs));
+            },
+            (Token { token_type: TokenType::GreaterEqual, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs >= lhs));
+            },
+            // LESS THAN OPERATOR
+            (Token { token_type: TokenType::Less, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs < lhs));
+            },
+            (Token { token_type: TokenType::Less, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs < lhs));
+            },
+            // LESS OR EQUAL THAN OPERATOR
+            (Token { token_type: TokenType::LessEqual, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs <= lhs));
+            },
+            (Token { token_type: TokenType::LessEqual, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
+                return Ok(LiteralValue::Bool(rhs <= lhs));
+            },
+            // EQUALITY OPERATOR
+            (Token { token_type: TokenType::EqualEqual, lexeme: _, line: _, col: _}, rhs, lhs) => {
+                return Ok(LiteralValue::Bool(rhs == lhs));
+            },
+            // INEQUALITY OPERATOR
+            (Token { token_type: TokenType::BangEqual, lexeme: _, line: _, col: _}, rhs, lhs) => {
+                return Ok(LiteralValue::Bool(rhs != lhs));
+            },
+            // If we're here, it means there's an illegal use of an operator, so return an error specifying that
+            _ => Err(InterpreterRuntimeError {
+                message: format!("Illegal use of {} between operands", operator.lexeme),
+                line: operator.line,
+                col: operator.col
+            })
+        }
+    }
+}
+
+impl AstInterpreter {
+    fn evaluate(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
+        return expression.accept(self);
     }
 }
 
@@ -118,6 +232,7 @@ impl<'a> Parser<'a> {
 
     fn synchronize(&mut self) {
         self.panic_mode = false;
+        self.advance();
 
         while !self.is_at_end() {
             if self.previous().token_type == TokenType::Semicolon {
@@ -229,19 +344,19 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expr, ParserError> {
-        if self.match_tokens(&[TokenType::Identifier("true".to_string())]) {
+        if self.match_tokens_with_value(&[TokenType::Keyword("true".to_string())]) {
             return Ok(Expr::Literal {
-                value: LiteralValue::True
+                value: LiteralValue::Bool(true)
             });
         }
 
-        if self.match_tokens(&[TokenType::Identifier("false".to_string())]) {
+        if self.match_tokens_with_value(&[TokenType::Keyword("false".to_string())]) {
             return Ok(Expr::Literal {
-                value: LiteralValue::False
+                value: LiteralValue::Bool(false)
             });
         }
 
-        if self.match_tokens(&[TokenType::Identifier("nil".to_string())]) {
+        if self.match_tokens_with_value(&[TokenType::Keyword("nil".to_string())]) {
             return Ok(Expr::Literal {
                 value: LiteralValue::Nil
             });
@@ -275,12 +390,27 @@ impl<'a> Parser<'a> {
             });
         }
 
-        panic!("Non-exhaustive matching for expression in parser. Panicking");
+        let peeked_token = self.peek();
+        return Err(ParserError {
+            message: "Expected expression".to_string(),
+            line: peeked_token.line,
+            col: peeked_token.col
+        })
     }
 
     fn match_tokens(&mut self, token_types: &[TokenType]) -> bool {
         for token_type in token_types {
             if self.check(&token_type) {
+                self.advance();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn match_tokens_with_value(&mut self, token_types: &[TokenType]) -> bool {
+        for token_type in token_types {
+            if self.check_with_value(&token_type) {
                 self.advance();
                 return true;
             }
@@ -295,6 +425,13 @@ impl<'a> Parser<'a> {
         return std::mem::discriminant(&self.peek().token_type) == std::mem::discriminant(token_type);
     }
 
+    fn check_with_value(&self, token_type: &TokenType) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+        return &self.peek().token_type == token_type;
+    }
+
     fn is_at_end(&self) -> bool {
         return self.peek().token_type == TokenType::EOF;
     }
@@ -307,7 +444,7 @@ impl<'a> Parser<'a> {
         return self.tokens[self.current-1].clone();
     }
 
-    pub fn error_at(&mut self, token: &Token, message: &str) {
+    pub fn error_at(&mut self, _: &Token, _: &str) {
         if self.panic_mode {
             return;
         }
