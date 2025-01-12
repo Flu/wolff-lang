@@ -5,12 +5,16 @@ pub mod input_stream;
 pub mod lexer;
 pub mod errors;
 pub mod parser;
+pub mod ast;
+pub mod interpreter;
 
+use ast::AstPrinter;
 use colored::*;
 use input_stream::InputStream;
+use interpreter::AstInterpreter;
 use lexer::Token;
 use lexer::TokenStream;
-use parser::{Parser, AstInterpreter, AstPrinter};
+use parser::Parser;
 use rustyline::history::FileHistory;
 use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
@@ -77,6 +81,8 @@ fn interpret_string(source_code: &String) {
     let result = parser.parse();
     println!("{}", result.len());
 
+    let mut interpreter = AstInterpreter::new();
+
     for stmt in result.iter() {
         match &stmt {
             Ok(a) => {
@@ -85,7 +91,6 @@ fn interpret_string(source_code: &String) {
                 print_text_with_blue(&"Abstract syntax tree".to_string());
                 println!("{}", result);
 
-                let mut interpreter = AstInterpreter;
                 let evaluation_result = a.accept(&mut interpreter);
 
                 match evaluation_result {
@@ -148,6 +153,7 @@ fn print_text_with_blue(message: &String) {
     println!("{colored_message}");
 }
 
+#[allow(dead_code)]
 fn print_text_with_green(message: &String) {
     let colored_message = message.green().bold();
     println!("{colored_message}");

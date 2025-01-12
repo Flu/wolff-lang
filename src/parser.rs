@@ -1,255 +1,8 @@
 use core::panic;
 
+use crate::ast::{Expr, Stmt, LiteralValue};
 use crate::lexer::*;
-use crate::errors::{ParserError, InterpreterRuntimeError};
-
-pub trait ExprVisitor<T> {
-    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
-    fn visit_grouping_expr(&mut self, expression: &Expr) -> T;
-    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> T;
-    fn visit_literal_expr(&mut self, value: &LiteralValue) -> T;
-}
-
-pub trait StmtVisitor<T> {
-    fn visit_stmt_expr(&mut self, expr: &Expr) -> T;
-    fn visit_print_expr(&mut self, expr: &Expr) -> T;
-}
-
-#[derive(Debug, Clone)]
-pub enum Stmt {
-    Expression {
-        expression: Expr
-    },
-    Print {
-        expression: Expr
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Expr {
-    Binary {
-        left: Box<Expr>,
-        operator: Token,
-        right: Box<Expr>,
-    },
-    Grouping {
-        expression: Box<Expr>,
-    },
-    Unary {
-        operator: Token,
-        right: Box<Expr>,
-    },
-    Literal {
-        value: LiteralValue,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum LiteralValue {
-    Number(f64),
-    Text(String),
-    Bool(bool),
-    Nil,
-}
-
-impl Expr {
-    /// Accept a visitor for traversing this expression
-    pub fn accept<T>(&self, visitor: &mut dyn ExprVisitor<T>) -> T {
-        match self {
-            Expr::Binary { left, operator, right } => {
-                visitor.visit_binary_expr(left, operator, right)
-            }
-            Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
-            Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
-            Expr::Literal { value } => visitor.visit_literal_expr(value),
-        }
-    }
-}
-
-impl Stmt {
-    pub fn accept<T>(&self, visitor: &mut dyn StmtVisitor<T>) -> T {
-        match self {
-            Stmt::Expression { expression } => visitor.visit_stmt_expr(expression),
-            Stmt::Print { expression } => visitor.visit_print_expr(expression)
-        }
-    }
-}
-
-pub struct AstPrinter;
-
-impl ExprVisitor<String> for AstPrinter {
-    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> String {
-        let left_str = left.accept(self);
-        let right_str = right.accept(self);
-        format!("({} {} {})", operator.token_type, left_str, right_str)
-    }
-
-    fn visit_grouping_expr(&mut self, expression: &Expr) -> String {
-        let expr_str = expression.accept(self);
-        format!("(group {})", expr_str)
-    }
-
-    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> String {
-        let right_str = right.accept(self);
-        format!("({} {})", operator.lexeme, right_str)
-    }
-
-    fn visit_literal_expr(&mut self, value: &LiteralValue) -> String {
-        match value {
-            LiteralValue::Number(num) => num.to_string(),
-            LiteralValue::Text(text) => format!("\"{}\"", text),
-            LiteralValue::Bool(boolean) => boolean.to_string(),
-            LiteralValue::Nil => "nil".to_string(),
-        }
-    }
-}
-
-impl StmtVisitor<String> for AstPrinter {
-    fn visit_print_expr(&mut self, expr: &Expr) -> String {
-        let expr_str = expr.accept(self);
-        format!("(print_stmt {expr_str})")
-    }
-
-    fn visit_stmt_expr(&mut self, expr: &Expr) -> String {
-        let expr_str = expr.accept(self);
-        format!("(expr_stmt {expr_str})")
-    }
-}
-
-pub struct AstInterpreter;
-
-impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
-    fn visit_literal_expr(&mut self, value: &LiteralValue) -> Result<LiteralValue, InterpreterRuntimeError> {
-        Ok(value.clone())
-    }
-
-    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
-        self.evaluate(expression)
-    }
-
-    fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
-        let right_value = self.evaluate(right)?;
-
-        match (operator, right_value) {
-            (Token { token_type: TokenType::Bang, lexeme: _, line: _, col: _}, LiteralValue::Bool(boolean)) => {
-                return Ok(LiteralValue::Bool(!boolean));
-            }
-            (Token { token_type: TokenType::Bang, lexeme: _, line: _, col: _}, LiteralValue::Nil) => {
-                return Ok(LiteralValue::Bool(true));
-            }
-            (Token { token_type: TokenType::Bang, lexeme: _, line: _, col: _}, _) => {
-                return Ok(LiteralValue::Bool(false));
-            }
-            (Token { token_type: TokenType::Minus, lexeme: _, line: _, col: _}, LiteralValue::Number(number)) => {
-                return Ok(LiteralValue::Number(-number));
-            }
-            _ => return Err(InterpreterRuntimeError {
-                message: format!("Illegal use of {} for operand", operator.lexeme),
-                line: operator.line,
-                col: operator.col
-            })
-        }
-    }
-
-    fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
-        let left_value = self.evaluate(left)?;
-        let right_value = self.evaluate(right)?;
-
-        match (operator, left_value, right_value) {
-            // MINUS OPERATOR
-            (Token { token_type: TokenType::Minus, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Number(rhs - lhs));
-            },
-            // SLASH OPERATOR
-            (Token { token_type: TokenType::Slash, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Number(rhs / lhs));
-            },
-            // PLUS OPERATOR
-            (Token { token_type: TokenType::Plus, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Number(rhs + lhs));
-            },
-            // STAR OPERATOR
-            (Token { token_type: TokenType::Star, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Number(rhs * lhs));
-            },
-            (Token { token_type: TokenType::Star, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Text(lhs)) => {
-                // TODO: this is a truncating cast. When implementing integers, be careful for such uses
-                return Ok(LiteralValue::Text(lhs.repeat(rhs as usize)));
-            },
-            // PLUS OPERATOR FOR STRINGS
-            (Token { token_type: TokenType::Plus, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
-                return Ok(LiteralValue::Text(format!("{}{}", rhs, lhs)));
-            },
-            // GREATER THAN OPERATOR
-            (Token { token_type: TokenType::Greater, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs > lhs));
-            },
-            (Token { token_type: TokenType::Greater, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs > lhs));
-            },
-            // GREATER OR EQUAL THAN OPERATOR
-            (Token { token_type: TokenType::GreaterEqual, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs >= lhs));
-            },
-            (Token { token_type: TokenType::GreaterEqual, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs >= lhs));
-            },
-            // LESS THAN OPERATOR
-            (Token { token_type: TokenType::Less, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs < lhs));
-            },
-            (Token { token_type: TokenType::Less, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs < lhs));
-            },
-            // LESS OR EQUAL THAN OPERATOR
-            (Token { token_type: TokenType::LessEqual, lexeme: _, line: _, col: _}, LiteralValue::Text(rhs), LiteralValue::Text(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs <= lhs));
-            },
-            (Token { token_type: TokenType::LessEqual, lexeme: _, line: _, col: _}, LiteralValue::Number(rhs), LiteralValue::Number(lhs)) => {
-                return Ok(LiteralValue::Bool(rhs <= lhs));
-            },
-            // EQUALITY OPERATOR
-            (Token { token_type: TokenType::EqualEqual, lexeme: _, line: _, col: _}, rhs, lhs) => {
-                return Ok(LiteralValue::Bool(rhs == lhs));
-            },
-            // INEQUALITY OPERATOR
-            (Token { token_type: TokenType::BangEqual, lexeme: _, line: _, col: _}, rhs, lhs) => {
-                return Ok(LiteralValue::Bool(rhs != lhs));
-            },
-            // If we're here, it means there's an illegal use of an operator, so return an error specifying that
-            _ => Err(InterpreterRuntimeError {
-                message: format!("Illegal use of {} between operands", operator.lexeme),
-                line: operator.line,
-                col: operator.col
-            })
-        }
-    }
-}
-
-impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
-    fn visit_print_expr(&mut self, expr: &Expr) -> Result<(), InterpreterRuntimeError> {
-        let lit_value = self.evaluate(expr)?;
-
-        match lit_value {
-            LiteralValue::Number(number) => println!("{number}"),
-            LiteralValue::Text(string) => println!("{string}"),
-            LiteralValue::Bool(boolean) => println!("{boolean}"),
-            LiteralValue::Nil => println!("nil"),
-        }
-        Ok(())
-    }
-
-    fn visit_stmt_expr(&mut self, expr: &Expr) -> Result<(), InterpreterRuntimeError> {
-        self.evaluate(expr)?;
-        Ok(())
-    }
-}
-
-impl AstInterpreter {
-    fn evaluate(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
-        return expression.accept(self);
-    }
-}
+use crate::errors::ParserError;
 
 pub struct Parser<'a> {
     current: usize,
@@ -272,16 +25,44 @@ impl<'a> Parser<'a> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            match self.statement() {
+            match self.declaration() {
                 Ok(stmt) => statements.push(Ok(stmt)),
                 Err(e) => {
-                     statements.push(Err(e));
+                    statements.push(Err(e));
                     self.synchronize();
                 }
             }
         }
 
         statements
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, ParserError> {
+        if self.match_tokens_with_value(&[TokenType::Keyword("var".to_string())]) {
+            return self.var_declaration();
+        }
+        self.statement()
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
+        let name = self.consume(TokenType::Identifier("".to_string()), "Expected variable name")?;
+
+        let initializer_expression;
+        if self.match_tokens(&[TokenType::Equal]) {
+            initializer_expression = self.expression()?;
+        } else {
+            return Err(ParserError {
+                message: "Variable can't be declared but not initialized".to_string(),
+                line: name.line,
+                col: name.col
+            })
+        }
+
+        self.consume(TokenType::Semicolon, "Expected semicolon after declaration")?;
+        return Ok(Stmt::Var {
+            name,
+            initializer: initializer_expression
+        });
     }
 
     fn statement(&mut self) -> Result<Stmt, ParserError> {
@@ -424,6 +205,15 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Result<Expr, ParserError> {
+        if self.match_tokens(&[TokenType::Identifier("".to_string())]) {
+            let token = self.previous();
+            match token.token_type {
+                TokenType::Identifier(_) => return Ok(Expr::Variable {
+                    name: token
+                }),
+                _ => panic!("Something went terribly wrong in parsing. Expecting a variable name.")
+            }
+        }
         if self.match_tokens_with_value(&[TokenType::Keyword("true".to_string())]) {
             return Ok(Expr::Literal {
                 value: LiteralValue::Bool(true)
