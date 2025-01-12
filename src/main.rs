@@ -6,11 +6,12 @@ pub mod lexer;
 pub mod errors;
 pub mod parser;
 
+use errors::InvalidTokenError;
 use input_stream::InputStream;
 use lexer::Token;
 use lexer::TokenStream;
 use lexer::TokenType;
-use parser::LiteralValue;
+use parser::{Parser};
 use rustyline::history::FileHistory;
 use std::env;
 use std::fs;
@@ -19,55 +20,36 @@ use rustyline::{Editor, Result};
 use parser::{AstPrinter, Expr};
 
 fn main() {
-    // Create tokens
-    let plus_token = Token {
-        lexeme: "+".to_string(),
-        token_type: TokenType::Plus,
-        line: 0,
-        col: 0
-    };
-
-    let star_token = Token {
-        lexeme: "*".to_string(),
-        token_type: TokenType::Star,
-        line: 0,
-        col: 0
-    };
-
-    // Build the AST
-    let inner_expr = Expr::Binary {
-        left: Box::new(Expr::Literal {
-            value: LiteralValue::Number(2.0),
-        }),
-        operator: star_token,
-        right: Box::new(Expr::Literal {
-            value: LiteralValue::Number(3.0),
-        }),
-    };
-
-    let outer_expr = Expr::Binary {
-        left: Box::new(Expr::Literal {
-            value: LiteralValue::Number(1.0),
-        }),
-        operator: plus_token,
-        right: Box::new(Expr::Grouping {
-            expression: Box::new(inner_expr),
-        }),
-    };
-
-    // Pretty print the AST
-    let mut printer = AstPrinter;
-    let result = outer_expr.accept(&mut printer);
-
-    println!("{}", result);
-
     let args: Vec<String> = env::args().collect();
     print_splash_screen();
 
     return match args.get(1) {
-        Some(filename) => start_lexer_from_file(filename).expect("Something went wrong while reading the file"),
+        Some(filename) => compile(filename),
         None => start_prompt().expect("Something went wrong"),
     };
+}
+
+fn compile(filename: &String) {
+    let contents = fs::read_to_string(filename.as_str()).expect("Error when opening file");
+
+    let tokens = tokenize(&contents);
+
+    if tokens.len() == 0 {
+        println!("The lexer finished with errors. Aborting.");
+        return;
+    }
+    let mut parser = Parser::new(&tokens);
+    let expr = parser.parse();
+    println!("{}", expr.len());
+
+    let ast = match &expr[0] {
+        Ok(a) => a,
+        Err(e) => panic!("This is not an AST")
+    };
+
+    let mut printer = AstPrinter;
+    let result = ast.accept(&mut printer);
+    println!("{}", result);
 }
 
 fn print_splash_screen() {
@@ -130,5 +112,27 @@ fn start_lexer(contents: &String) {
                 print_error_message(&e);
             }
         };
+    }
+}
+
+fn tokenize(contents: &String) -> Vec<Token> {
+    let mut input_stream = InputStream::new(&contents);
+    let mut lexer = TokenStream::new(&mut input_stream);
+
+    let mut token_vector: Vec<Token> = Vec::new();
+
+    while !lexer.eof() {
+        match lexer.next() {
+            Ok(new_token) => token_vector.push(new_token),
+            Err(e) => {
+                print_error_message(&e);
+            }
+        };
+    }
+
+    if !lexer.has_error {
+        return token_vector;
+    } else {
+        return Vec::new();
     }
 }

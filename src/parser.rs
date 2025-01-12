@@ -83,7 +83,7 @@ impl Visitor<String> for AstPrinter {
     }
 }
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     current: usize,
     tokens: &'a Vec<Token>,
     had_error: bool,
@@ -100,9 +100,41 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn compile(&self) -> bool {
+    pub fn parse(&mut self) -> Vec<Result<Expr, ParserError>> {
+        let mut expressions = Vec::new();
 
-        !self.had_error
+        while !self.is_at_end() {
+            match self.expression() {
+                Ok(expr) => expressions.push(Ok(expr)),
+                Err(e) => {
+                    expressions.push(Err(e));
+                    self.synchronize();
+                }
+            }
+        }
+
+        expressions
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+
+        while !self.is_at_end() {
+            if self.previous().token_type == TokenType::Semicolon {
+                return;
+            }
+
+            match &self.peek().token_type {
+                TokenType::Keyword(keyword) if [
+                    "class", "else", "fun", "for", "if", "lambda", "print", "return", "super", "this", "var", "while", "λ"
+                ].contains(&keyword.as_str()) => {
+                    return;
+                },
+                _ => {}
+            }
+
+            self.advance();
+        }
     }
 
     pub fn advance(&mut self) -> Token {
@@ -118,6 +150,7 @@ impl<'a> Parser<'a> {
         }
         
         let token = self.peek();
+        self.error_at(&token, message);
         Err(ParserError {
             message: message.to_string(),
             line: token.line,
@@ -272,5 +305,16 @@ impl<'a> Parser<'a> {
 
     fn previous(&self) -> Token {
         return self.tokens[self.current-1].clone();
+    }
+
+    pub fn error_at(&mut self, token: &Token, message: &str) {
+        if self.panic_mode {
+            return;
+        }
+        self.panic_mode = true;
+
+        // TODO: No printing in the parser itself, the parser should return a list of errors instead
+        // println!("Error at {}:{}: {}", token.line, token.col, message);
+        self.had_error = true;
     }
 }
