@@ -350,7 +350,7 @@ fn is_keyword(word: &String) -> bool {
 }
 
 fn is_id_start(ch: char) -> bool {
-    Regex::new(r"[a-zA-Zλ_]")
+    Regex::new(r"[[^0-9]&&\p{Emoji}a-zA-Zλ]")
         .unwrap()
         .is_match(ch.to_string().as_str())
 }
@@ -364,7 +364,7 @@ fn is_whitespace(ch: char) -> bool {
 }
 
 fn is_id(ch: char) -> bool {
-    is_id_start(ch) || "-!?0123456789".contains(ch)
+    is_id_start(ch) || "!?0123456789".contains(ch)
 }
 
 #[cfg(test)]
