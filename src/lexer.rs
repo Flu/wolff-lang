@@ -9,7 +9,7 @@ const KEYWORDS: &'static [&'static str] = &[
     "and", "class", "else", "false", "fun", "for", "if", "lambda", "nil", "or", "print", "return", "super", "this", "true", "var", "while",
     "λ"
 ];
-const PUNCTS: &'static [char] = &['(', ')', '{', '}', ',', '.', '-', '+', ';', '+', '-', '*', '/', '%', '=', '&', '|', '^', '<', '>', '!'];
+const PUNCTS: &'static [char] = &['!', '%', '&', '(', ')', '*', '+', '+', ',', '-', '-', '.', '/', ';', '<', '=', '>', '^', '{', '|', '}'];
 
 pub struct TokenStream {
     input: InputStream,
@@ -346,17 +346,17 @@ impl TokenStream {
 }
 
 fn is_keyword(word: &String) -> bool {
-    KEYWORDS.iter().any(|&i| i == word)
+    KEYWORDS.binary_search(&word.as_str()).is_ok()
 }
 
 fn is_id_start(ch: char) -> bool {
-    Regex::new(r"[[^0-9]&&\p{Emoji}a-zA-Zλ]")
+    Regex::new(r"[[^0-9*]&&\p{Emoji}a-zA-Zλ]")
         .unwrap()
         .is_match(ch.to_string().as_str())
 }
 
 fn is_punctuation(ch: char) -> bool {
-    PUNCTS.iter().any(|&i| i == ch)
+    PUNCTS.binary_search(&ch).is_ok()
 }
 
 fn is_whitespace(ch: char) -> bool {

@@ -20,6 +20,7 @@ use rustyline::error::ReadlineError;
 use rustyline::{Editor, Result};
 use std::env;
 use std::fs;
+use std::time::Instant;
 
 
 fn main() {
@@ -70,7 +71,8 @@ fn interpret_file(filename: &String) {
 }
 
 fn interpret_string(source_code: &String) {
-    let tokens = tokenize(&source_code);
+    let tokens = run_lexer_with_clock(&tokenize, &source_code);
+
 
     if tokens.len() == 0 {
         println!("The lexer finished with errors. Aborting.");
@@ -158,3 +160,15 @@ fn print_text_with_green(message: &String) {
     let colored_message = message.green().bold();
     println!("{colored_message}");
 }
+
+fn run_lexer_with_clock<F, T, V>(fun: &F, arg: &T) -> V
+    where F: Fn(&T) -> V {
+        let start_time = Instant::now();
+
+        let ret = fun(arg);
+
+        // Stop the timer
+        let duration = start_time.elapsed().as_millis();
+        println!("Lexer took {duration} ms");
+        ret
+    }
