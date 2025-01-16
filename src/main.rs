@@ -22,6 +22,15 @@ use std::env;
 use std::fs;
 use std::time::Instant;
 
+macro_rules! time {
+    ($msg:expr, $expr:expr) => {{
+        let start = Instant::now();
+        let result = $expr; // Execute the expression
+        let elapsed = start.elapsed();
+        println!("{} took {:.2} ms", $msg, elapsed.as_millis());
+        result
+    }};
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -40,13 +49,15 @@ fn start_prompt() -> Result<()> {
     if rl.load_history("history.txt").is_err() {
         println!("No previous history.");
     }
+
+    let mut interpreter = AstInterpreter::new();
     loop {
-        let readline = rl.readline("\x1b[1mλ\x1b[0m ");
+        let readline = rl.readline(&"\x1b[1;32mλ\x1b[0m ");
 
         match readline {
             Ok(line) => {
                 let _ = rl.add_history_entry(line.as_str());
-                interpret_string(&line);
+                interpret_string_prompt(&line, &mut interpreter);
             },
             Err(ReadlineError::Interrupted) => {
                 println!("Interruption detected. Halting.");
@@ -71,8 +82,7 @@ fn interpret_file(filename: &String) {
 }
 
 fn interpret_string(source_code: &String) {
-    let tokens = run_lexer_with_clock(&tokenize, &source_code);
-
+    let tokens = time!("Lexer", tokenize(&source_code));
 
     if tokens.len() == 0 {
         println!("The lexer finished with errors. Aborting.");
@@ -81,7 +91,6 @@ fn interpret_string(source_code: &String) {
 
     let mut parser = Parser::new(&tokens);
     let result = parser.parse();
-    println!("{}", result.len());
 
     let mut interpreter = AstInterpreter::new();
 
@@ -93,12 +102,48 @@ fn interpret_string(source_code: &String) {
                 print_text_with_blue(&"Abstract syntax tree".to_string());
                 println!("{}", result);
 
-                let evaluation_result = a.accept(&mut interpreter);
+                let evaluation_result = time!("Interpreter", a.accept(&mut interpreter));
 
                 match evaluation_result {
-                    Ok(evaled) => {
-                        print_text_with_blue(&"Evaluation result".to_string());
-                        println!("{:?}", evaled);
+                    Ok(_) => {
+                    },
+                    Err(e) => {
+                        println!("{e}");
+                    }
+                }
+            },
+            Err(e) => {
+                println!("{}:{} {}", e.line, e.col, e.message);
+            }
+        };
+    }
+}
+
+fn interpret_string_prompt<'a>(source_code: &'a String, interpreter: &mut AstInterpreter) {
+    let tokens = time!("Lexer", tokenize(&source_code));
+
+
+    if tokens.len() == 0 {
+        println!("The lexer finished with errors. Aborting.");
+        return;
+    }
+
+    let mut parser = Parser::new(&tokens);
+    let result = parser.parse();
+    println!("{}", result.len());
+
+    for stmt in result.iter() {
+        match &stmt {
+            Ok(a) => {
+                let mut printer = AstPrinter;
+                let result = a.accept(&mut printer);
+                print_text_with_blue(&"Abstract syntax tree".to_string());
+                println!("{}", result);
+
+                let evaluation_result = time!("Interpreter", a.accept(interpreter));
+
+                match evaluation_result {
+                    Ok(_) => {
                     },
                     Err(e) => {
                         println!("{e}");
@@ -160,15 +205,3 @@ fn print_text_with_green(message: &String) {
     let colored_message = message.green().bold();
     println!("{colored_message}");
 }
-
-fn run_lexer_with_clock<F, T, V>(fun: &F, arg: &T) -> V
-    where F: Fn(&T) -> V {
-        let start_time = Instant::now();
-
-        let ret = fun(arg);
-
-        // Stop the timer
-        let duration = start_time.elapsed().as_millis();
-        println!("Lexer took {duration} ms");
-        ret
-    }

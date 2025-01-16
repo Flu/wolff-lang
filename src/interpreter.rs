@@ -176,6 +176,14 @@ impl AstInterpreter {
         interpreter
     }
 
+    pub fn from_environment(env: Environment) -> Self {
+        let interpreter = AstInterpreter {
+            environment: env
+        };
+
+        interpreter
+    }
+
     fn evaluate(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
         return expression.accept(self);
     }
