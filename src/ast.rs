@@ -2,6 +2,9 @@ use crate::lexer::Token;
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    Block {
+        statements: Vec<Stmt>
+    },
     Expression {
         expression: Expr
     },
@@ -16,6 +19,10 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
+    Assign {
+        name: Token,
+        value: Box<Expr>
+    },
     Binary {
         left: Box<Expr>,
         operator: Token,
@@ -48,6 +55,9 @@ impl Expr {
     /// Accept a visitor for traversing this expression
     pub fn accept<T>(&self, visitor: &mut dyn ExprVisitor<T>) -> T {
         match self {
+            Expr::Assign { name, value } => {
+                visitor.visit_assign_expr(name, value)
+            }
             Expr::Binary { left, operator, right } => {
                 visitor.visit_binary_expr(left, operator, right)
             }
@@ -62,6 +72,7 @@ impl Expr {
 impl Stmt {
     pub fn accept<T>(&self, visitor: &mut dyn StmtVisitor<T>) -> T {
         match self {
+            Stmt::Block { statements } => visitor.visit_block_stmt(statements),
             Stmt::Expression { expression } => visitor.visit_stmt_stmt(expression),
             Stmt::Print { expression } => visitor.visit_print_stmt(expression),
             Stmt::Var { name, initializer } => visitor.visit_var_stmt(name, initializer)
@@ -70,6 +81,7 @@ impl Stmt {
 }
 
 pub trait ExprVisitor<T> {
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> T;
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
     fn visit_grouping_expr(&mut self, expression: &Expr) -> T;
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> T;
@@ -78,6 +90,7 @@ pub trait ExprVisitor<T> {
 }
 
 pub trait StmtVisitor<T> {
+    fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> T;
     fn visit_stmt_stmt(&mut self, expr: &Expr) -> T;
     fn visit_print_stmt(&mut self, expr: &Expr) -> T;
     fn visit_var_stmt(&mut self, name: &Token, initializer: &Expr) -> T;
@@ -86,6 +99,10 @@ pub trait StmtVisitor<T> {
 pub struct AstPrinter;
 
 impl ExprVisitor<String> for AstPrinter {
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> String {
+        format!("({} {} {})", "assign", name.lexeme, value.accept(self))
+    }
+
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> String {
         let left_str = left.accept(self);
         let right_str = right.accept(self);
@@ -117,6 +134,10 @@ impl ExprVisitor<String> for AstPrinter {
 }
 
 impl StmtVisitor<String> for AstPrinter {
+    fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> String {
+        format!("(block [{:?}])", block)
+    }
+
     fn visit_print_stmt(&mut self, expr: &Expr) -> String {
         let expr_str = expr.accept(self);
         format!("(print_stmt {expr_str})")

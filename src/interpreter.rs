@@ -1,27 +1,75 @@
 use std::collections::HashMap;
 use crate::errors::InterpreterRuntimeError;
 use crate::lexer::{Token, TokenType};
-use crate::ast::{LiteralValue, ExprVisitor, Expr, StmtVisitor};
+use crate::ast::{Expr, ExprVisitor, LiteralValue, Stmt, StmtVisitor};
 
 pub struct AstInterpreter {
     environment: Environment
 }
 
 pub struct Environment {
-    values: HashMap<String, LiteralValue>
+    values: HashMap<String, LiteralValue>,
+    enclosing: Box<Option<Environment>>
 }
 
 impl Environment {
+
+    pub fn new() -> Self {
+        Environment {
+            values: HashMap::new(),
+            enclosing: Box::new(None),
+        }
+    }
+
+    pub fn from_enclosing(enclosing: Environment) -> Self {
+        Environment {
+            values: HashMap::new(),
+            enclosing: Box::new(Some(enclosing))
+        }
+    }
+
     pub fn define(&mut self, name: String, value: LiteralValue) {
         self.values.insert(name, value);
     }
 
     pub fn get(&self, name: String) -> Option<&LiteralValue> {
-        self.values.get(&name)
+        let maybe_value = self.values.get(&name);
+
+        if maybe_value.is_none() && self.enclosing.is_some() {
+            if let Some(some_environment) = self.enclosing.as_ref() {
+                return some_environment.get(name);
+            }
+        }
+
+        return maybe_value;
+    }
+
+    pub fn assign(&mut self, name: String, value: LiteralValue) -> Result<LiteralValue, InterpreterRuntimeError> {
+        if self.values.contains_key(&name) {
+            *self.values.get_mut(&name).unwrap() = value.clone();
+            return Ok(value);
+        }
+
+        if self.enclosing.is_some() {
+            return self.assign(name, value);
+        }
+
+        return Err(InterpreterRuntimeError {
+            message: "Variable is not defined".to_string(),
+            line: 0,
+            col: 0
+        });
     }
 }
 
 impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpreter {
+
+    fn visit_assign_expr(&mut self, name: &Token, value: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
+        let rvalue = self.evaluate(value)?;
+        self.environment.assign(name.lexeme.clone(), rvalue.clone())?;
+        return Ok(rvalue);
+    }
+
     fn visit_literal_expr(&mut self, value: &LiteralValue) -> Result<LiteralValue, InterpreterRuntimeError> {
         Ok(value.clone())
     }
@@ -141,6 +189,16 @@ impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpret
 }
 
 impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
+    fn visit_block_stmt(&mut self, block: &Vec<crate::ast::Stmt>) -> Result<(), InterpreterRuntimeError> {
+        // Create a new environment
+        let new_environment = Environment::from_enclosing(std::mem::replace(&mut self.environment, Environment::new()));
+    
+        // Execute the block in the new environment
+        self.execute_block(block, new_environment)?;
+    
+        Ok(())
+    }
+
     fn visit_print_stmt(&mut self, expr: &Expr) -> Result<(), InterpreterRuntimeError> {
         let lit_value = self.evaluate(expr)?;
 
@@ -168,9 +226,7 @@ impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
 impl AstInterpreter {
     pub fn new() -> Self {
         let interpreter = AstInterpreter {
-            environment: Environment {
-                values: HashMap::new()
-            }
+            environment: Environment::new()
         };
 
         interpreter
@@ -186,5 +242,29 @@ impl AstInterpreter {
 
     fn evaluate(&mut self, expression: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
         return expression.accept(self);
+    }
+
+    pub fn interpret(&mut self, statements: &Vec<Stmt>) -> Result<(), InterpreterRuntimeError> {
+        for stmt in statements.iter() {
+            self.execute(stmt)?;
+        }
+
+        Ok(())
+    }
+
+    fn execute(&mut self, statement: &Stmt) -> Result<(), InterpreterRuntimeError> {
+        statement.accept(self)
+    }
+
+    pub fn execute_block(&mut self, statements: &Vec<Stmt>, environment: Environment) -> Result<(), InterpreterRuntimeError> {
+        let previous = std::mem::replace(&mut self.environment, environment);
+
+        for statement in statements.iter() {
+            self.execute(statement)?;
+        }
+
+        // Restore the previous environment
+        self.environment = previous;
+        Ok(())
     }
 }

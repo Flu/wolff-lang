@@ -9,6 +9,7 @@ pub mod ast;
 pub mod interpreter;
 
 use ast::AstPrinter;
+use ast::Stmt;
 use colored::*;
 use input_stream::InputStream;
 use interpreter::AstInterpreter;
@@ -90,33 +91,23 @@ fn interpret_string(source_code: &String) {
     }
 
     let mut parser = Parser::new(&tokens);
-    let result = parser.parse();
+    let results = parser.parse();
+
+    if results.iter().any(|x| x.is_err()) {
+        for result in results.iter() {
+            if result.is_err() {
+                let e = result.clone().err().unwrap();
+                println!("{}:{} {}", e.line, e.col, e.message);
+            }
+        }
+        return;
+    }
+
+    let statements: Vec<Stmt> = results.iter().map(|x| x.clone().unwrap()).collect();
 
     let mut interpreter = AstInterpreter::new();
 
-    for stmt in result.iter() {
-        match &stmt {
-            Ok(a) => {
-                let mut printer = AstPrinter;
-                let result = a.accept(&mut printer);
-                print_text_with_blue(&"Abstract syntax tree".to_string());
-                println!("{}", result);
-
-                let evaluation_result = time!("Interpreter", a.accept(&mut interpreter));
-
-                match evaluation_result {
-                    Ok(_) => {
-                    },
-                    Err(e) => {
-                        println!("{e}");
-                    }
-                }
-            },
-            Err(e) => {
-                println!("{}:{} {}", e.line, e.col, e.message);
-            }
-        };
-    }
+    let _ = interpreter.interpret(&statements);
 }
 
 fn interpret_string_prompt<'a>(source_code: &'a String, interpreter: &mut AstInterpreter) {

@@ -6,7 +6,7 @@ use std::fmt;
 
 // VERY IMPORTANT that this list stays ordered lexicographically, otherwise the lexer breaks
 const KEYWORDS: &'static [&'static str] = &[
-    "and", "class", "else", "false", "fun", "for", "if", "lambda", "nil", "or", "print", "return", "super", "this", "true", "var", "while",
+    "and", "class", "else", "false", "for", "fun", "if", "lambda", "nil", "or", "print", "return", "super", "this", "true", "var", "while",
     "λ"
 ];
 const PUNCTS: &'static [char] = &['!', '%', '&', '(', ')', '*', '+', '+', ',', '-', '-', '.', '/', ';', '<', '=', '>', '^', '{', '|', '}'];

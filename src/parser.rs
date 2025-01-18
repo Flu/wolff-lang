@@ -70,7 +70,23 @@ impl<'a> Parser<'a> {
             return self.print_statement();
         }
 
+        if self.match_tokens_with_value(&[TokenType::LeftBrace]) {
+            return Ok(Stmt::Block { statements: self.block_statement()? });
+        }
+
         self.expression_statement()
+    }
+
+    fn block_statement(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        let mut statements: Vec<Stmt> = Vec::new();
+
+        while self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            let declaration = self.declaration()?;
+            statements.push(declaration);
+        }
+
+        self.consume(TokenType::RightBrace, "Expected '}' after a block")?;
+        return Ok(statements);
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -135,7 +151,26 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParserError> {
+        let expr: Expr = self.equality()?;
+
+        if self.match_tokens(&[TokenType::Equal]) {
+            let equals: Token = self.previous();
+            let value: Expr = self.assignment()?;
+
+            return match expr {
+                Expr::Variable { ref name } => Ok(Expr::Assign { name: name.clone(), value: Box::new(value) }),
+                _ => Err(ParserError {
+                    message: "Invalid l-value for assignment".to_string(),
+                    line: equals.line,
+                    col: equals.col
+                })
+            };
+        }
+        return Ok(expr);
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {
