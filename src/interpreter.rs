@@ -189,6 +189,33 @@ impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpret
 }
 
 impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
+
+    fn visit_if_stmt(&mut self, if_stmt: &Stmt) -> Result<(), InterpreterRuntimeError> {
+        println!("here");
+        match if_stmt {
+            Stmt::If { condition, then_branch, else_branch } => {
+                println!("here aga");
+                let condition_result = self.evaluate(condition)?;
+                if condition_result == LiteralValue::Bool(true) {
+                    println!("true");
+                    self.execute(&then_branch)?;
+                } else if condition_result == LiteralValue::Bool(false) && else_branch.is_some() {
+                    println!("false");
+                    self.execute(&else_branch.as_ref().unwrap())?;
+                }
+
+                // TODO: do something about the fact that expressions don't have any location information
+                // We need to show the error location to the user, but right now, there isn't much I can do about it
+                return Err(InterpreterRuntimeError {
+                    message: "If condition must evaluate to a boolean value".to_string(),
+                    line: 0,
+                    col: 0
+                });
+            },
+            _ => panic!("Trying to execute an if statement that is not an if statement")
+        };
+    }
+
     fn visit_block_stmt(&mut self, block: &Vec<crate::ast::Stmt>) -> Result<(), InterpreterRuntimeError> {
         // Create a new environment
         let new_environment = Environment::from_enclosing(std::mem::replace(&mut self.environment, Environment::new()));

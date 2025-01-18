@@ -107,7 +107,11 @@ fn interpret_string(source_code: &String) {
 
     let mut interpreter = AstInterpreter::new();
 
-    let _ = interpreter.interpret(&statements);
+    let result_or_error = interpreter.interpret(&statements);
+    match result_or_error {
+        Ok(()) => println!("Program interpreted succesfully"),
+        Err(e) => println!("{:?}", e)
+    };
 }
 
 fn interpret_string_prompt<'a>(source_code: &'a String, interpreter: &mut AstInterpreter) {

@@ -32,6 +32,7 @@ pub struct ParserError {
     pub col: usize
 }
 
+#[derive(Debug, Clone)]
 pub struct InterpreterRuntimeError {
     pub message: String,
     pub line: usize,

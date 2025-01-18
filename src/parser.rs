@@ -66,6 +66,9 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Stmt, ParserError> {
+        if self.match_tokens_with_value(&[TokenType::Keyword("if".to_string())]) {
+            return self.if_statement();
+        }
         if self.match_tokens_with_value(&[TokenType::Keyword("print".to_string())]) {
             return self.print_statement();
         }
@@ -75,6 +78,22 @@ impl<'a> Parser<'a> {
         }
 
         self.expression_statement()
+    }
+
+    fn if_statement(&mut self,) -> Result<Stmt, ParserError> {
+        let condition: Expr = self.expression()?;
+
+        let then_branch = self.statement()?;
+        let mut else_branch = None;
+
+        if self.match_tokens_with_value(&[TokenType::Keyword("else".to_string())]) {
+            else_branch = Some(Box::new(self.statement()?));
+        }
+
+        return Ok(Stmt::If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch })
     }
 
     fn block_statement(&mut self) -> Result<Vec<Stmt>, ParserError> {

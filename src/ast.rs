@@ -8,6 +8,11 @@ pub enum Stmt {
     Expression {
         expression: Expr
     },
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>
+    },
     Print {
         expression: Expr
     },
@@ -72,6 +77,7 @@ impl Expr {
 impl Stmt {
     pub fn accept<T>(&self, visitor: &mut dyn StmtVisitor<T>) -> T {
         match self {
+            Stmt::If {..} => visitor.visit_if_stmt(self),
             Stmt::Block { statements } => visitor.visit_block_stmt(statements),
             Stmt::Expression { expression } => visitor.visit_stmt_stmt(expression),
             Stmt::Print { expression } => visitor.visit_print_stmt(expression),
@@ -90,6 +96,7 @@ pub trait ExprVisitor<T> {
 }
 
 pub trait StmtVisitor<T> {
+    fn visit_if_stmt(&mut self, if_stmt: &Stmt) -> T;
     fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> T;
     fn visit_stmt_stmt(&mut self, expr: &Expr) -> T;
     fn visit_print_stmt(&mut self, expr: &Expr) -> T;
@@ -134,6 +141,18 @@ impl ExprVisitor<String> for AstPrinter {
 }
 
 impl StmtVisitor<String> for AstPrinter {
+    fn visit_if_stmt(&mut self, if_stmt: &Stmt) -> String {
+        return match if_stmt {
+            Stmt::If { condition, then_branch, else_branch: None } => {
+                format!("(if {:?} {:?})", condition.accept(self), then_branch.accept(self))
+            },
+            Stmt::If { condition, then_branch, else_branch } => {
+                format!("(if {:?} {:?} {:?})", condition.accept(self), then_branch.accept(self), else_branch.as_ref().unwrap().accept(self))
+            }
+            _ => panic!("Tried to print an if statement that is not an if statement")
+        };
+    }
+
     fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> String {
         format!("(block [{:?}])", block)
     }
