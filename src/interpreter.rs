@@ -102,6 +102,30 @@ impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpret
         }
     }
 
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
+        let left_value = self.evaluate(left)?;
+
+        if operator.token_type == TokenType::Keyword("and".to_string()) {
+            if left_value == LiteralValue::Bool(false) {
+                return Ok(LiteralValue::Bool(false));
+            }
+            return Ok(self.evaluate(right)?);
+        }
+
+        if operator.token_type == TokenType::Keyword("or".to_string()) {
+            if left_value == LiteralValue::Bool(true) {
+                return Ok(LiteralValue::Bool(true));
+            }
+            return Ok(self.evaluate(right)?);
+        }
+
+        Err(InterpreterRuntimeError {
+            message: format!("Illegal use of logical {} between operands", operator.lexeme),
+            line: operator.line,
+            col: operator.col
+        })
+    }
+
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<LiteralValue, InterpreterRuntimeError> {
         let left_value = self.evaluate(left)?;
         let right_value = self.evaluate(right)?;
@@ -199,9 +223,11 @@ impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
                 if condition_result == LiteralValue::Bool(true) {
                     println!("true");
                     self.execute(&then_branch)?;
+                    return Ok(());
                 } else if condition_result == LiteralValue::Bool(false) && else_branch.is_some() {
                     println!("false");
                     self.execute(&else_branch.as_ref().unwrap())?;
+                    return Ok(());
                 }
 
                 // TODO: do something about the fact that expressions don't have any location information

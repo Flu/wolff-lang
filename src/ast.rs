@@ -1,4 +1,4 @@
-use crate::lexer::Token;
+use crate::lexer::{Token, TokenType};
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -36,6 +36,11 @@ pub enum Expr {
     Grouping {
         expression: Box<Expr>,
     },
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
     Unary {
         operator: Token,
         right: Box<Expr>,
@@ -66,6 +71,9 @@ impl Expr {
             Expr::Binary { left, operator, right } => {
                 visitor.visit_binary_expr(left, operator, right)
             }
+            Expr::Logical { left, operator, right } => {
+                visitor.visit_logical_expr(left, operator, right)
+            }
             Expr::Grouping { expression } => visitor.visit_grouping_expr(expression),
             Expr::Unary { operator, right } => visitor.visit_unary_expr(operator, right),
             Expr::Literal { value } => visitor.visit_literal_expr(value),
@@ -91,6 +99,7 @@ pub trait ExprVisitor<T> {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
     fn visit_grouping_expr(&mut self, expression: &Expr) -> T;
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> T;
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> T;
     fn visit_literal_expr(&mut self, value: &LiteralValue) -> T;
     fn visit_variable_expr(&mut self, name: &Token) -> T;
 }
@@ -124,6 +133,17 @@ impl ExprVisitor<String> for AstPrinter {
     fn visit_unary_expr(&mut self, operator: &Token, right: &Expr) -> String {
         let right_str = right.accept(self);
         format!("({} {})", operator.lexeme, right_str)
+    }
+
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &Token, right: &Expr) -> String {
+        let left_str = left.accept(self);
+        let right_str = right.accept(self);
+        if operator.token_type == TokenType::Keyword("and".to_string()) {
+            return format!("(and {} {})", left_str, right_str);
+        } else if operator.token_type == TokenType::Keyword("or".to_string()) {
+            return format!("(or {} {})", left_str, right_str);
+        }
+        panic!("Trying to print a logical expression that doesn't use 'and' or 'or'");
     }
 
     fn visit_literal_expr(&mut self, value: &LiteralValue) -> String {
