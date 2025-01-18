@@ -13,6 +13,10 @@ pub enum Stmt {
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>
     },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
     Print {
         expression: Expr
     },
@@ -86,6 +90,7 @@ impl Stmt {
     pub fn accept<T>(&self, visitor: &mut dyn StmtVisitor<T>) -> T {
         match self {
             Stmt::If {..} => visitor.visit_if_stmt(self),
+            Stmt::While { condition, body } => visitor.visit_while_stmt(condition, body),
             Stmt::Block { statements } => visitor.visit_block_stmt(statements),
             Stmt::Expression { expression } => visitor.visit_stmt_stmt(expression),
             Stmt::Print { expression } => visitor.visit_print_stmt(expression),
@@ -106,6 +111,7 @@ pub trait ExprVisitor<T> {
 
 pub trait StmtVisitor<T> {
     fn visit_if_stmt(&mut self, if_stmt: &Stmt) -> T;
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> T;
     fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> T;
     fn visit_stmt_stmt(&mut self, expr: &Expr) -> T;
     fn visit_print_stmt(&mut self, expr: &Expr) -> T;
@@ -171,6 +177,10 @@ impl StmtVisitor<String> for AstPrinter {
             }
             _ => panic!("Tried to print an if statement that is not an if statement")
         };
+    }
+
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> String {
+        format!("(while {:?} {:?}", condition.accept(self), body.accept(self))
     }
 
     fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> String {

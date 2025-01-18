@@ -8,50 +8,48 @@ pub struct AstInterpreter {
 }
 
 pub struct Environment {
-    values: HashMap<String, LiteralValue>,
-    enclosing: Box<Option<Environment>>
+    values: Vec<HashMap<String, LiteralValue>>,
 }
 
 impl Environment {
 
     pub fn new() -> Self {
+        let mut global_scope = Vec::new();
+        global_scope.push(HashMap::new());
+
         Environment {
-            values: HashMap::new(),
-            enclosing: Box::new(None),
+            values: global_scope,
         }
     }
 
-    pub fn from_enclosing(enclosing: Environment) -> Self {
-        Environment {
-            values: HashMap::new(),
-            enclosing: Box::new(Some(enclosing))
-        }
+    pub fn create_new_scope(&mut self) {
+        self.values.push(HashMap::new());
+    }
+
+    pub fn delete_most_recent_scope(&mut self) {
+        self.values.remove(self.values.len()-1);
     }
 
     pub fn define(&mut self, name: String, value: LiteralValue) {
-        self.values.insert(name, value);
+        self.values.last_mut().unwrap().insert(name, value);
     }
 
     pub fn get(&self, name: String) -> Option<&LiteralValue> {
-        let maybe_value = self.values.get(&name);
-
-        if maybe_value.is_none() && self.enclosing.is_some() {
-            if let Some(some_environment) = self.enclosing.as_ref() {
-                return some_environment.get(name);
+        for scope in self.values.iter().rev() {
+            let maybe_lit = scope.get(&name);
+            if maybe_lit.is_some() {
+                return maybe_lit;
             }
         }
-
-        return maybe_value;
+        return None;
     }
 
     pub fn assign(&mut self, name: String, value: LiteralValue) -> Result<LiteralValue, InterpreterRuntimeError> {
-        if self.values.contains_key(&name) {
-            *self.values.get_mut(&name).unwrap() = value.clone();
-            return Ok(value);
-        }
-
-        if self.enclosing.is_some() {
-            return self.assign(name, value);
+        for scope in self.values.iter_mut().rev() {
+            if scope.contains_key(&name) {
+                *scope.get_mut(&name).unwrap() = value.clone();
+                return Ok(value);
+            }
         }
 
         return Err(InterpreterRuntimeError {
@@ -215,17 +213,15 @@ impl ExprVisitor<Result<LiteralValue, InterpreterRuntimeError>> for AstInterpret
 impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
 
     fn visit_if_stmt(&mut self, if_stmt: &Stmt) -> Result<(), InterpreterRuntimeError> {
-        println!("here");
         match if_stmt {
             Stmt::If { condition, then_branch, else_branch } => {
-                println!("here aga");
                 let condition_result = self.evaluate(condition)?;
                 if condition_result == LiteralValue::Bool(true) {
-                    println!("true");
+
                     self.execute(&then_branch)?;
                     return Ok(());
                 } else if condition_result == LiteralValue::Bool(false) && else_branch.is_some() {
-                    println!("false");
+
                     self.execute(&else_branch.as_ref().unwrap())?;
                     return Ok(());
                 }
@@ -242,12 +238,27 @@ impl StmtVisitor<Result<(), InterpreterRuntimeError>> for AstInterpreter {
         };
     }
 
-    fn visit_block_stmt(&mut self, block: &Vec<crate::ast::Stmt>) -> Result<(), InterpreterRuntimeError> {
-        // Create a new environment
-        let new_environment = Environment::from_enclosing(std::mem::replace(&mut self.environment, Environment::new()));
-    
-        // Execute the block in the new environment
-        self.execute_block(block, new_environment)?;
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), InterpreterRuntimeError> {
+        let condition_result = self.evaluate(condition)?;
+
+        // FIXME: this is crusty as fuck, please change it to something more robust when/if I add types
+        if condition_result != LiteralValue::Bool(true) && condition_result != LiteralValue::Bool(false) {
+            return Err(InterpreterRuntimeError {
+                message: "While condition must evaluate to a boolean value".to_string(),
+                line: 0,
+                col: 0
+            });
+        }
+
+        while self.evaluate(condition)? == LiteralValue::Bool(true) {
+            self.execute(body)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_block_stmt(&mut self, block: &Vec<Stmt>) -> Result<(), InterpreterRuntimeError> {
+        self.execute_block(block)?;
     
         Ok(())
     }
@@ -309,15 +320,15 @@ impl AstInterpreter {
         statement.accept(self)
     }
 
-    pub fn execute_block(&mut self, statements: &Vec<Stmt>, environment: Environment) -> Result<(), InterpreterRuntimeError> {
-        let previous = std::mem::replace(&mut self.environment, environment);
+    pub fn execute_block(&mut self, statements: &Vec<Stmt>) -> Result<(), InterpreterRuntimeError> {
+        self.environment.create_new_scope();
 
         for statement in statements.iter() {
             self.execute(statement)?;
         }
 
         // Restore the previous environment
-        self.environment = previous;
+        self.environment.delete_most_recent_scope();
         Ok(())
     }
 }

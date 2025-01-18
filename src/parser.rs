@@ -69,6 +69,11 @@ impl<'a> Parser<'a> {
         if self.match_tokens_with_value(&[TokenType::Keyword("if".to_string())]) {
             return self.if_statement();
         }
+
+        if self.match_tokens_with_value(&[TokenType::Keyword("while".to_string())]) {
+            return self.while_statement();
+        }
+
         if self.match_tokens_with_value(&[TokenType::Keyword("print".to_string())]) {
             return self.print_statement();
         }
@@ -94,6 +99,17 @@ impl<'a> Parser<'a> {
             condition,
             then_branch: Box::new(then_branch),
             else_branch })
+    }
+
+    fn while_statement(&mut self,) -> Result<Stmt, ParserError> {
+        let condition: Expr = self.expression()?;
+
+        let body = self.statement()?;
+
+        return Ok(Stmt::While {
+            condition,
+            body: Box::new(body)
+        });
     }
 
     fn block_statement(&mut self) -> Result<Vec<Stmt>, ParserError> {
